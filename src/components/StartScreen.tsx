@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Stethoscope, Clock, Users, Trophy, Play, Swords, Upload } from 'lucide-react';
+import { GraduationCap, Clock, Users, Trophy, Play, Swords, Upload } from 'lucide-react';
 import { getAllQuestions } from '@/utils/game';
 import { TaxonomyPicker } from '@/components/TaxonomyPicker';
 import { CollaborateModal } from '@/components/CollaborateModal';
+import { RankingModal } from '@/components/RankingModal';
 import type { TaxonomySelection } from '@/components/TaxonomyPicker';
 import type { Chair, ChallengeData, Subject, University } from '@/types';
 
@@ -13,13 +14,15 @@ interface StartScreenProps {
   subjects: Subject[];
   chairs: Chair[];
   taxonomyError: string;
+  totalQuestions: number;
   onOpenAdmin: () => void;
 }
 
-export function StartScreen({ onStart, challengeData, universities, subjects, chairs, taxonomyError, onOpenAdmin }: StartScreenProps) {
+export function StartScreen({ onStart, challengeData, universities, subjects, chairs, taxonomyError, totalQuestions, onOpenAdmin }: StartScreenProps) {
   const [name, setName] = useState('');
   const [selection, setSelection] = useState<TaxonomySelection>({ universityId: '', subjectId: '', chairId: '' });
   const [collaborateOpen, setCollaborateOpen] = useState(false);
+  const [rankingOpen, setRankingOpen] = useState(false);
 
   const canStart = Boolean(selection.universityId && selection.subjectId && selection.chairId);
 
@@ -38,10 +41,10 @@ export function StartScreen({ onStart, challengeData, universities, subjects, ch
         {/* Logo */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-20 h-20 bg-white/10 backdrop-blur-sm rounded-3xl mb-4 border border-white/20 animate-float shadow-xl">
-            <Stethoscope className="w-10 h-10 text-white" />
+            <GraduationCap className="w-10 h-10 text-white" />
           </div>
           <h1 className="text-4xl font-extrabold text-white tracking-tight">Aprobados</h1>
-          <p className="text-teal-100 mt-2 text-lg">Trivia para estudiantes de medicina</p>
+          <p className="text-teal-100 mt-2 text-lg">Trivia para estudiantes</p>
         </div>
 
         {/* Challenge banner */}
@@ -96,6 +99,14 @@ export function StartScreen({ onStart, challengeData, universities, subjects, ch
             {canStart ? (challengeData ? 'Aceptar el desafío' : 'Comenzar a jugar') : 'Completá la clasificación para jugar'}
           </button>
 
+          <button
+            type="button"
+            onClick={() => setRankingOpen(true)}
+            className="mt-3 w-full rounded-xl border-2 border-teal-200 bg-teal-50 py-3 text-sm font-bold text-teal-700 transition hover:bg-teal-100 active:scale-[0.98]"
+          >
+            Ver ranking
+          </button>
+
           <button type="button" onClick={() => setCollaborateOpen(true)} className="mt-4 w-full flex items-center justify-center gap-2 rounded-xl border-2 border-teal-200 bg-teal-50 py-3 text-sm font-bold text-teal-700 transition hover:bg-teal-100 active:scale-[0.98]">
             <Upload className="h-4 w-4" />
             Colaborar / Enviar material
@@ -123,10 +134,11 @@ export function StartScreen({ onStart, challengeData, universities, subjects, ch
         </div>
 
         <p className="text-center text-teal-200/70 text-xs mt-6">
-          {getAllQuestions().length} preguntas disponibles
+          {totalQuestions} preguntas disponibles
         </p>
       </div>
 
+      <RankingModal open={rankingOpen} chairId={null} chairs={chairs} onClose={() => setRankingOpen(false)} />
       <CollaborateModal open={collaborateOpen} onClose={() => setCollaborateOpen(false)} />
     </div>
   );

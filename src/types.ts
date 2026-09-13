@@ -45,3 +45,17 @@ export interface TaxonomySuggestion {
   status: 'pending' | 'approved' | 'rejected';
   created_at: string;
 }
+
+export interface Submission {
+  id: string;
+  created_at: string;
+  university: string;
+  subject: string;
+  chair: string;
+  source_notes?: string;
+  material_type: 'apunte' | 'preguntero_choice' | 'pregunta_respuesta';
+  file_url: string;
+  file_type: string;
+  processed: boolean;
+  extracted_questions?: Question[];
+}

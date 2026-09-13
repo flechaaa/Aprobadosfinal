@@ -15,19 +15,42 @@ import {
   AlertCircle,
   Trash2,
   CheckCheck,
+  Flag,
+  Save,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { loadSuggestions, moderateSuggestion } from '@/utils/taxonomy';
-import { loadPendingSubmissions, insertQuestion, markSubmissionProcessed, type Submission } from '@/utils/moderation';
+import {
+  loadPendingSubmissions,
+  insertQuestion,
+  insertBatchQuestions,
+  markSubmissionProcessed,
+  ensureTaxonomyFromSubmission,
+  type Submission,
+} from '@/utils/moderation';
 import { extractQuestionsFromFile } from '@/utils/gemini';
 import { fetchAndExtractText } from '@/utils/fileParser';
 import { deleteSubmission } from '@/utils/submissions';
+import { sendApprovedSubmissionPushNotification } from '@/utils/notifications';
 import type { Question, TaxonomySuggestion } from '@/types';
 
-interface AdminPanelProps { onBack: () => void; }
+interface AdminPanelProps {
+  onBack: () => void;
+}
 
 interface EditableQuestion extends Question {
   approved: boolean;
+}
+
+interface QuestionReport {
+  id: string;
+  question_id: string;
+  question_text: string | null;
+  reason: string;
+  details: string | null;
+  created_at: string;
+  raw_data?: Question;
+  suggested_fix?: Question | null;
 }
 
 const levelLabels = { university: 'Universidad', subject: 'Materia', chair: 'Cátedra' } as const;
@@ -38,7 +61,7 @@ const materialTypeLabels: Record<string, string> = {
   pregunta_respuesta: 'Preguntas con Respuesta',
 };
 
-type Tab = 'taxonomy' | 'materials';
+type Tab = 'taxonomy' | 'materials' | 'reports';
 
 export function AdminPanel({ onBack }: AdminPanelProps) {
   const [passwordInput, setPasswordInput] = useState('');
@@ -62,7 +85,31 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
   const [progressMsg, setProgressMsg] = useState('');
   const [approvingAll, setApprovingAll] = useState(false);
 
+  // Reports state
+  const [reports, setReports] = useState<QuestionReport[]>([]);
+  const [loadingReports, setLoadingReports] = useState(false);
+  const [editingReportId, setEditingReportId] = useState<string | null>(null);
+  const [editingDraft, setEditingDraft] = useState<Question | null>(null);
+
   const selected = submissions.find((s) => s.id === selectedId) ?? null;
+
+  const fetchReports = useCallback(async () => {
+    setLoadingReports(true);
+    try {
+      const { data, error } = await supabase
+        .from('question_reports')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (!error && data) {
+        setReports(data);
+      }
+    } catch {
+      setMessage('No se pudieron cargar los reportes.');
+    } finally {
+      setLoadingReports(false);
+    }
+  }, []);
 
   const unlock = async () => {
     if (!passwordInput) return;
@@ -75,6 +122,7 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
       setSuggestions(pending);
       setUnlocked(true);
       void refreshSubmissions();
+      void fetchReports();
     } catch {
       setMessage('Contraseña incorrecta o panel no disponible.');
     }
@@ -86,9 +134,11 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
     setUnlocked(false);
     setSuggestions([]);
     setSubmissions([]);
+    setReports([]);
     setSelectedId(null);
     setQuestions([]);
     setEditingId(null);
+    setEditingReportId(null);
   };
 
   const refreshSubmissions = useCallback(async () => {
@@ -108,13 +158,15 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
   }, [selectedId]);
 
   useEffect(() => {
-    if (unlocked && tab === 'materials') void refreshSubmissions();
-  }, [unlocked, tab, refreshSubmissions]);
+    if (unlocked) {
+      if (tab === 'materials') void refreshSubmissions();
+      if (tab === 'reports') void fetchReports();
+    }
+  }, [unlocked, tab, refreshSubmissions, fetchReports]);
 
   const selectSubmission = (sub: Submission) => {
     setSelectedId(sub.id);
     setExtractError('');
-    // Si ya tenía preguntas extraídas previamente en Supabase, las mostramos de inmediato
     if (sub.extracted_questions && sub.extracted_questions.length > 0) {
       setQuestions(sub.extracted_questions.map((q) => ({ ...q, approved: false })));
     } else {
@@ -138,6 +190,148 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
       setMessage('No pudimos actualizar la propuesta.');
     }
     setBusy(false);
+  };
+
+  const handleApproveSuggestedFix = async (report: QuestionReport) => {
+    if (!report.suggested_fix) return;
+    setBusy(true);
+    setMessage('');
+
+    try {
+      const fix = report.suggested_fix;
+
+      const { error } = await supabase
+        .from('questions')
+        .update({
+          question: fix.pregunta,
+          options: fix.opciones,
+          correct_option: fix.correcta,
+          explanation: fix.explicacion,
+        })
+        .eq('id', report.question_id);
+
+      if (error) {
+        await supabase.from('questions').insert([
+          {
+            question: fix.pregunta,
+            options: fix.opciones,
+            correct_option: fix.correcta,
+            explanation: fix.explicacion,
+            active: true,
+          },
+        ]);
+      }
+
+      await supabase.from('question_reports').delete().eq('id', report.id);
+      setReports((prev) => prev.filter((r) => r.id !== report.id));
+      setMessage('¡Corrección del usuario aprobada y aplicada con éxito!');
+    } catch (err: any) {
+      setMessage(err.message || 'Error al aplicar la corrección.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleDismissReport = async (reportId: string) => {
+    setBusy(true);
+    const { error } = await supabase.from('question_reports').delete().eq('id', reportId);
+    if (!error) {
+      setReports((prev) => prev.filter((r) => r.id !== reportId));
+      if (editingReportId === reportId) setEditingReportId(null);
+      setMessage('Reporte resuelto.');
+    } else {
+      setMessage('Error al descartar el reporte.');
+    }
+    setBusy(false);
+  };
+
+  const handleDeleteReportedQuestion = async (report: QuestionReport) => {
+    const confirm = window.confirm('¿Seguro que querés dar de baja esta pregunta y eliminar el reporte?');
+    if (!confirm) return;
+
+    setBusy(true);
+    try {
+      await supabase.from('questions').delete().eq('id', report.question_id);
+      await supabase.from('question_reports').delete().eq('id', report.id);
+      setReports((prev) => prev.filter((r) => r.id !== report.id));
+      if (editingReportId === report.id) setEditingReportId(null);
+      setMessage('Pregunta eliminada.');
+    } catch {
+      setMessage('No se pudo eliminar la pregunta.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleStartEditReport = (report: QuestionReport) => {
+    if (editingReportId === report.id) {
+      setEditingReportId(null);
+      setEditingDraft(null);
+      return;
+    }
+    setEditingReportId(report.id);
+
+    const baseOpciones =
+      report.raw_data?.opciones ||
+      report.suggested_fix?.opciones ||
+      ['', '', '', ''];
+
+    setEditingDraft({
+      pregunta:
+        report.raw_data?.pregunta ||
+        report.suggested_fix?.pregunta ||
+        report.question_text ||
+        '',
+      opciones:
+        Array.isArray(baseOpciones) && baseOpciones.length > 0
+          ? baseOpciones
+          : ['', '', '', ''],
+      correcta: report.raw_data?.correcta ?? report.suggested_fix?.correcta ?? 0,
+      explicacion:
+        report.raw_data?.explicacion ||
+        report.suggested_fix?.explicacion ||
+        '',
+    });
+  };
+
+  const handleSaveReportFix = async (report: QuestionReport) => {
+    if (!editingDraft) return;
+    setBusy(true);
+    setMessage('');
+
+    try {
+      const { error: updateError } = await supabase
+        .from('questions')
+        .update({
+          question: editingDraft.pregunta,
+          options: editingDraft.opciones,
+          correct_option: editingDraft.correcta,
+          explanation: editingDraft.explicacion,
+        })
+        .eq('id', report.question_id);
+
+      if (updateError) {
+        await supabase.from('questions').insert([
+          {
+            question: editingDraft.pregunta,
+            options: editingDraft.opciones,
+            correct_option: editingDraft.correcta,
+            explanation: editingDraft.explicacion,
+            active: true,
+          },
+        ]);
+      }
+
+      await supabase.from('question_reports').delete().eq('id', report.id);
+      setReports((prev) => prev.filter((r) => r.id !== report.id));
+      setEditingReportId(null);
+      setEditingDraft(null);
+      setMessage('¡Pregunta corregida y guardada exitosamente!');
+    } catch (err: any) {
+      setMessage(err.message || 'Error al guardar la corrección.');
+    } finally {
+      setBusy(false);
+    }
   };
 
   const handleExtract = async () => {
@@ -165,13 +359,11 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
         const mapped = result.questions.map((q) => ({ ...q, approved: false }));
         setQuestions(mapped);
 
-        // Guardar borrador en Supabase para tenerlo persistido
         await supabase
           .from('submissions')
           .update({ extracted_questions: result.questions })
           .eq('id', selected.id);
 
-        // Actualizar el estado local de submissions
         setSubmissions((prev) =>
           prev.map((s) => (s.id === selected.id ? { ...s, extracted_questions: result.questions } : s))
         );
@@ -234,11 +426,25 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
     setBusy(true);
     setMessage('');
     try {
-      await insertQuestion(q.pregunta, q.opciones, q.correcta, q.explicacion, selected.id, adminPassword);
+      const taxonomy = await ensureTaxonomyFromSubmission(selected, adminPassword);
+      await insertQuestion(
+        q.pregunta,
+        q.opciones,
+        q.correcta,
+        q.explicacion,
+        selected.id,
+        adminPassword,
+        taxonomy.chairId,
+        {
+          university: selected.university,
+          subject: selected.subject,
+          chair: selected.chair,
+        }
+      );
       setQuestions((current) =>
         current.map((item, i) => (i === index ? { ...item, approved: true } : item)),
       );
-      setMessage('Pregunta incorporada al juego.');
+      setMessage('Pregunta incorporada al juego y taxonomía sincronizada.');
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'No se pudo guardar la pregunta.';
       setMessage(msg);
@@ -252,16 +458,29 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
     setMessage('');
 
     try {
-      // 1. Insertar una por una las que no estén marcadas como aprobadas
+      const taxonomy = await ensureTaxonomyFromSubmission(selected, adminPassword);
       const pendingQuestions = questions.filter((q) => !q.approved);
-      for (const q of pendingQuestions) {
-        await insertQuestion(q.pregunta, q.opciones, q.correcta, q.explicacion, selected.id, adminPassword);
-      }
 
-      // 2. Marcar submission como completada
+      // Inserción atómica en bloque de todas las preguntas juntas
+      await insertBatchQuestions(
+        pendingQuestions,
+        selected.id,
+        taxonomy.chairId,
+        {
+          university: selected.university,
+          subject: selected.subject,
+          chair: selected.chair,
+        }
+      );
+
+      await sendApprovedSubmissionPushNotification({
+        subject: selected.subject,
+        chair: selected.chair,
+        sessionId: null,
+      });
+
       await markSubmissionProcessed(selected.id, adminPassword);
 
-      // 3. Actualizar la lista en pantalla
       const remaining = submissions.filter((s) => s.id !== selected.id);
       setSubmissions(remaining);
       if (remaining.length > 0) {
@@ -270,7 +489,7 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
         setSelectedId(null);
         setQuestions([]);
       }
-      setMessage(`¡Lote aprobado con éxito! Se sumaron ${pendingQuestions.length} preguntas al juego.`);
+      setMessage(`¡Lote aprobado con éxito! Se sumaron ${pendingQuestions.length} preguntas listas para jugar.`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Error al aprobar el lote.';
       setMessage(msg);
@@ -315,7 +534,7 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
               </div>
               <div>
                 <h1 className="text-xl font-extrabold text-gray-900">Panel de administración</h1>
-                <p className="text-sm text-gray-500">Moderación de propuestas y materiales</p>
+                <p className="text-sm text-gray-500">Moderación de propuestas, materiales y reportes</p>
               </div>
             </div>
             <p className="mb-5 text-sm leading-relaxed text-gray-600">Ingresá la contraseña de administrador para acceder.</p>
@@ -382,6 +601,22 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
           }`}
         >
           Materiales Colaborativos
+        </button>
+        <button
+          onClick={() => setTab('reports')}
+          className={`px-4 py-3 text-sm font-bold transition border-b-2 flex items-center gap-2 ${
+            tab === 'reports'
+              ? 'border-red-500 text-red-700'
+              : 'border-transparent text-gray-400 hover:text-gray-600'
+          }`}
+        >
+          <Flag className="h-4 w-4" />
+          Reportes
+          {reports.length > 0 && (
+            <span className="rounded-full bg-red-100 text-red-700 px-2 py-0.5 text-xs font-bold">
+              {reports.length}
+            </span>
+          )}
         </button>
       </div>
 
@@ -459,7 +694,6 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
       {/* Materials tab */}
       {tab === 'materials' && (
         <div className="flex-1 flex flex-col overflow-hidden">
-          {/* Submission selector */}
           {submissions.length > 0 && (
             <div className="bg-white border-b border-gray-200 px-4 py-2.5 flex items-center gap-2 overflow-x-auto scrollbar-hide">
               <span className="text-xs font-bold uppercase tracking-wide text-gray-400 flex-shrink-0">Pendientes:</span>
@@ -492,7 +726,6 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
             </div>
           ) : selected ? (
             <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
-              {/* Left: Document viewer */}
               <div className="w-full lg:w-1/2 flex flex-col border-r border-gray-200 bg-gray-100">
                 <div className="bg-white px-4 py-3 border-b border-gray-200">
                   <div className="flex items-center justify-between mb-2">
@@ -502,8 +735,7 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
                       <span className="text-xs text-gray-400">·</span>
                       <span className="text-xs text-gray-500">{materialTypeLabels[selected.material_type] ?? selected.material_type}</span>
                     </div>
-                    
-                    {/* Acciones del documento: Ver y Eliminar */}
+
                     <div className="flex items-center gap-3">
                       <a
                         href={selected.file_url}
@@ -542,10 +774,8 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
                 </div>
               </div>
 
-              {/* Right: Questions panel */}
               <div className="w-full lg:w-1/2 flex flex-col overflow-y-auto">
                 <div className="p-4">
-                  {/* Botón de Extracción */}
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => void handleExtract()}
@@ -567,7 +797,6 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
                     </div>
                   )}
 
-                  {/* Banner de Aprobación Masiva */}
                   {questions.length > 0 && (
                     <div className="mt-4 flex items-center justify-between rounded-2xl border border-teal-200 bg-teal-50 p-4 shadow-sm">
                       <div>
@@ -592,7 +821,6 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
                     </div>
                   )}
 
-                  {/* Lista de Preguntas */}
                   {questions.length > 0 && (
                     <div className="mt-4 space-y-3">
                       {questions.map((q, qIndex) => (
@@ -673,6 +901,241 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
               </div>
             </div>
           ) : null}
+        </div>
+      )}
+
+      {/* Reports tab */}
+      {tab === 'reports' && (
+        <div className="flex-1 px-4 py-8 overflow-y-auto">
+          <div className="mx-auto max-w-3xl">
+            <div className="mb-6 flex items-center justify-between">
+              <div>
+                <p className="text-sm font-bold uppercase tracking-widest text-red-600">Moderación</p>
+                <h1 className="mt-1 text-2xl font-extrabold text-gray-900">Reportes de preguntas</h1>
+                <p className="mt-2 text-gray-500">Revisá y corregí reclamos enviados por los usuarios durante las partidas.</p>
+              </div>
+              <button
+                onClick={() => void fetchReports()}
+                disabled={loadingReports}
+                className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-600 hover:bg-gray-50 shadow-sm disabled:opacity-50"
+              >
+                {loadingReports ? 'Actualizando...' : 'Recargar'}
+              </button>
+            </div>
+
+            {loadingReports && reports.length === 0 ? (
+              <div className="rounded-3xl bg-white p-8 text-center shadow-lg">
+                <Loader2 className="mx-auto mb-3 h-8 w-8 animate-spin text-teal-600" />
+                <p className="text-sm font-semibold text-gray-500">Cargando reportes...</p>
+              </div>
+            ) : reports.length === 0 ? (
+              <div className="rounded-3xl bg-white p-8 text-center shadow-lg">
+                <Check className="mx-auto mb-3 h-8 w-8 text-teal-600" />
+                <p className="font-bold text-gray-800">No hay reportes pendientes</p>
+                <p className="mt-1 text-sm text-gray-500">Todas las preguntas reportadas fueron resueltas.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {reports.map((report) => (
+                  <div
+                    key={report.id}
+                    className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition hover:shadow-md"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 pb-3">
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-700">
+                        <Flag className="h-3 w-3" />
+                        {report.reason}
+                      </span>
+                      <span className="text-xs text-gray-400">
+                        {new Date(report.created_at).toLocaleString('es-AR', {
+                          day: '2-digit',
+                          month: '2-digit',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </span>
+                    </div>
+
+                    <div className="mt-3 space-y-2">
+                      {report.question_text && (
+                        <div className="rounded-xl bg-gray-50 p-3 text-sm font-medium text-gray-800 border border-gray-100">
+                          <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400 mb-1">Pregunta:</p>
+                          "{report.question_text}"
+                        </div>
+                      )}
+
+                      {report.details && (
+                        <div className="rounded-xl bg-amber-50/50 p-3 text-sm text-amber-900 border border-amber-100">
+                          <p className="text-[11px] font-bold uppercase tracking-wider text-amber-700 mb-1">Detalle del usuario:</p>
+                          {report.details}
+                        </div>
+                      )}
+
+                      <p className="text-[11px] text-gray-400">
+                        Identificador / Índice: <code className="rounded bg-gray-100 px-1 py-0.5 text-gray-600">{report.question_id}</code>
+                      </p>
+                    </div>
+
+                    {/* Propuesta de corrección del usuario */}
+                    {report.suggested_fix && (
+                      <div className="rounded-xl border border-teal-200 bg-teal-50/70 p-3.5 space-y-2 mt-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-extrabold uppercase tracking-wide text-teal-800 flex items-center gap-1.5">
+                            <Sparkles className="h-3.5 w-3.5 text-teal-600" />
+                            Corrección propuesta por el usuario:
+                          </span>
+                          <button
+                            onClick={() => void handleApproveSuggestedFix(report)}
+                            disabled={busy}
+                            className="flex items-center gap-1 rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-bold text-white shadow hover:bg-teal-700 transition disabled:opacity-50"
+                          >
+                            <CheckCheck className="h-3.5 w-3.5" />
+                            Aprobar y aplicar cambio
+                          </button>
+                        </div>
+
+                        <p className="text-xs font-medium text-gray-800">
+                          <strong className="text-teal-900">Enunciado:</strong> "{report.suggested_fix.pregunta}"
+                        </p>
+
+                        <div className="space-y-1">
+                          {Array.isArray(report.suggested_fix?.opciones) &&
+                            report.suggested_fix.opciones.map((opt, i) => (
+                              <div key={i} className="flex items-center gap-2 text-xs">
+                                <span
+                                  className={`w-5 h-5 rounded-full flex items-center justify-center font-bold text-[10px] ${
+                                    report.suggested_fix?.correcta === i
+                                      ? 'bg-teal-600 text-white'
+                                      : 'bg-gray-200 text-gray-600'
+                                  }`}
+                                >
+                                  {String.fromCharCode(65 + i)}
+                                </span>
+                                <span
+                                  className={
+                                    report.suggested_fix?.correcta === i
+                                      ? 'font-bold text-teal-900'
+                                      : 'text-gray-600'
+                                  }
+                                >
+                                  {opt}
+                                </span>
+                              </div>
+                            ))}
+                        </div>
+
+                        {report.suggested_fix.explicacion && (
+                          <p className="text-xs text-gray-600 pt-1 border-t border-teal-100">
+                            <strong className="text-teal-900">Explicación:</strong> {report.suggested_fix.explicacion}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Editor integrado si se presiona "Corregir Pregunta" */}
+                    {editingReportId === report.id && editingDraft && (
+                      <div className="mt-4 rounded-xl border-2 border-teal-500/30 bg-teal-50/40 p-4 space-y-3">
+                        <p className="text-xs font-bold uppercase text-teal-800">Editar y Corregir:</p>
+
+                        <textarea
+                          value={editingDraft.pregunta}
+                          onChange={(e) => setEditingDraft({ ...editingDraft, pregunta: e.target.value })}
+                          rows={2}
+                          className="w-full rounded-xl border border-teal-300 bg-white p-2.5 text-sm outline-none focus:ring-2 focus:ring-teal-500"
+                          placeholder="Enunciado de la pregunta"
+                        />
+
+                        <div className="space-y-1.5">
+                          {Array.isArray(editingDraft?.opciones) &&
+                            editingDraft.opciones.map((opt, idx) => (
+                              <div key={idx} className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingDraft({ ...editingDraft, correcta: idx })}
+                                  className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition ${
+                                    editingDraft.correcta === idx
+                                      ? 'border-teal-600 bg-teal-600 text-white'
+                                      : 'border-gray-300 bg-white hover:border-teal-400'
+                                  }`}
+                                  title="Marcar como correcta"
+                                >
+                                  {editingDraft.correcta === idx && <Check className="w-3.5 h-3.5" />}
+                                </button>
+                                <input
+                                  type="text"
+                                  value={opt}
+                                  onChange={(e) => {
+                                    const nuevas = [...(editingDraft.opciones || [])];
+                                    nuevas[idx] = e.target.value;
+                                    setEditingDraft({ ...editingDraft, opciones: nuevas });
+                                  }}
+                                  placeholder={`Opción ${String.fromCharCode(65 + idx)}`}
+                                  className={`flex-1 rounded-lg border bg-white px-3 py-1.5 text-sm outline-none ${
+                                    editingDraft.correcta === idx ? 'border-teal-400 font-medium' : 'border-gray-200'
+                                  }`}
+                                />
+                              </div>
+                            ))}
+                        </div>
+
+                        <textarea
+                          value={editingDraft.explicacion}
+                          onChange={(e) => setEditingDraft({ ...editingDraft, explicacion: e.target.value })}
+                          rows={2}
+                          className="w-full rounded-xl border border-gray-200 bg-white p-2.5 text-sm outline-none focus:border-teal-500"
+                          placeholder="Explicación / justificación"
+                        />
+
+                        <div className="flex justify-end gap-2 pt-2">
+                          <button
+                            onClick={() => { setEditingReportId(null); setEditingDraft(null); }}
+                            className="rounded-xl px-3 py-1.5 text-xs font-semibold text-gray-500 hover:text-gray-700"
+                          >
+                            Cancelar edición
+                          </button>
+                          <button
+                            onClick={() => void handleSaveReportFix(report)}
+                            disabled={busy}
+                            className="flex items-center gap-1.5 rounded-xl bg-teal-600 px-4 py-2 text-xs font-bold text-white shadow hover:bg-teal-700 transition disabled:opacity-50"
+                          >
+                            <Save className="h-3.5 w-3.5" />
+                            Guardar cambios y resolver reporte
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="mt-4 flex items-center justify-end gap-2 border-t border-gray-100 pt-3">
+                      <button
+                        onClick={() => handleStartEditReport(report)}
+                        disabled={busy}
+                        className="flex items-center gap-1 rounded-xl bg-teal-50 border border-teal-200 px-3.5 py-2 text-xs font-bold text-teal-700 transition hover:bg-teal-100 disabled:opacity-50"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                        {editingReportId === report.id ? 'Cerrar edición' : 'Corregir pregunta'}
+                      </button>
+                      <button
+                        onClick={() => void handleDismissReport(report.id)}
+                        disabled={busy}
+                        className="rounded-xl bg-gray-100 px-3.5 py-2 text-xs font-bold text-gray-600 transition hover:bg-gray-200 disabled:opacity-50"
+                      >
+                        Descartar reporte
+                      </button>
+                      <button
+                        onClick={() => void handleDeleteReportedQuestion(report)}
+                        disabled={busy}
+                        className="flex items-center gap-1 rounded-xl bg-red-600 px-3.5 py-2 text-xs font-bold text-white transition hover:bg-red-700 disabled:opacity-50"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        Eliminar pregunta
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

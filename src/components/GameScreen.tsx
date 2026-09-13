@@ -1,21 +1,21 @@
+import { ReportModal } from './ReportModal';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Check, X, Clock, ChevronRight } from 'lucide-react';
+import { Check, X, Clock, ChevronRight, Flag } from 'lucide-react';
 import { getAllQuestions, calculatePoints, TIME_PER_QUESTION } from '@/utils/game';
 import type { AnswerRecord, Question } from '@/types';
 
 interface GameScreenProps {
+  questions?: Question[];
   questionIndices: number[];
   onFinish: (answers: AnswerRecord[]) => void;
 }
 
 const LETTERS = ['A', 'B', 'C', 'D'];
 
-// Baraja las opciones de la pregunta y actualiza el índice de la respuesta correcta
 function shuffleQuestionOptions(q: Question): Question {
   const originalOptions = [...q.opciones];
   const correctText = originalOptions[q.correcta];
 
-  // Algoritmo Fisher-Yates
   const shuffled = [...originalOptions];
   for (let i = shuffled.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -29,27 +29,30 @@ function shuffleQuestionOptions(q: Question): Question {
   };
 }
 
-export function GameScreen({ questionIndices, onFinish }: GameScreenProps) {
+export function GameScreen({ questions: customQuestions, questionIndices, onFinish }: GameScreenProps) {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [timeLeft, setTimeLeft] = useState(TIME_PER_QUESTION);
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [showFeedback, setShowFeedback] = useState(false);
   const [answers, setAnswers] = useState<AnswerRecord[]>([]);
+  const answersRef = useRef<AnswerRecord[]>([]);
+  const [isReportOpen, setIsReportOpen] = useState(false);
   const answeredRef = useRef(false);
 
-  const allQuestions = getAllQuestions();
-  const rawQuestion = allQuestions[questionIndices[currentIdx]];
+  // Si vienen preguntas personalizadas desde Supabase las usamos directo; de lo contrario fallback al json
+  const activeQuestions = customQuestions && customQuestions.length > 0 ? customQuestions : getAllQuestions();
+  const rawQuestion = customQuestions && customQuestions.length > 0
+    ? activeQuestions[currentIdx]
+    : activeQuestions[questionIndices[currentIdx]];
 
-  // Cada vez que cambia de pregunta (currentIdx), baraja las opciones al azar
   const question = useMemo(() => {
     if (!rawQuestion) return rawQuestion;
     return shuffleQuestionOptions(rawQuestion);
-  }, [currentIdx, rawQuestion]);
+  }, [rawQuestion]);
 
-  const totalQuestions = questionIndices.length;
+  const totalQuestions = customQuestions && customQuestions.length > 0 ? customQuestions.length : questionIndices.length;
   const currentScore = answers.reduce((sum, a) => sum + a.points, 0);
 
-  // Reset for new question
   useEffect(() => {
     answeredRef.current = false;
     setTimeLeft(TIME_PER_QUESTION);
@@ -57,26 +60,30 @@ export function GameScreen({ questionIndices, onFinish }: GameScreenProps) {
     setShowFeedback(false);
   }, [currentIdx]);
 
+  useEffect(() => {
+    answersRef.current = answers;
+  }, [answers]);
+
   const recordAnswer = useCallback((idx: number | null) => {
     if (answeredRef.current || !question) return;
     answeredRef.current = true;
     const correct = idx !== null && idx === question.correcta;
     const points = correct ? calculatePoints(timeLeft) : 0;
+    const answer: AnswerRecord = {
+      questionIndex: questionIndices[currentIdx] ?? currentIdx,
+      selectedIndex: idx,
+      correct,
+      timeLeft,
+      points,
+    };
+
+    const nextAnswers = [...answersRef.current, answer];
+    answersRef.current = nextAnswers;
+    setAnswers(nextAnswers);
     setSelectedAnswer(idx);
     setShowFeedback(true);
-    setAnswers((prev) => [
-      ...prev,
-      {
-        questionIndex: questionIndices[currentIdx],
-        selectedIndex: idx,
-        correct,
-        timeLeft,
-        points,
-      },
-    ]);
   }, [currentIdx, question, questionIndices, timeLeft]);
 
-  // Timer
   useEffect(() => {
     if (showFeedback || answeredRef.current) return;
     if (timeLeft <= 0) {
@@ -91,7 +98,7 @@ export function GameScreen({ questionIndices, onFinish }: GameScreenProps) {
     if (currentIdx < totalQuestions - 1) {
       setCurrentIdx((i) => i + 1);
     } else {
-      onFinish(answers);
+      onFinish(answersRef.current);
     }
   };
 
@@ -143,12 +150,22 @@ export function GameScreen({ questionIndices, onFinish }: GameScreenProps) {
             </div>
 
             <div className="p-6 md:p-8">
-              {/* Timer display */}
+              {/* Timer display & Report Button */}
               <div className="flex items-center justify-between mb-6">
                 <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-gray-500">
                   <Clock className={`w-4 h-4 ${timeLeft <= 5 ? 'text-red-500' : 'text-teal-600'}`} />
                   {timeLeft}s
                 </span>
+
+                <button
+                  type="button"
+                  onClick={() => setIsReportOpen(true)}
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-400 hover:text-red-500 transition-colors py-1 px-2 rounded-lg hover:bg-red-50"
+                  title="Reportar error en la pregunta"
+                >
+                  <Flag className="w-3.5 h-3.5" />
+                  <span>Reportar</span>
+                </button>
               </div>
 
               {/* Question */}
@@ -243,6 +260,14 @@ export function GameScreen({ questionIndices, onFinish }: GameScreenProps) {
           </div>
         </div>
       </div>
+
+      {/* Modal de Reporte */}
+      <ReportModal
+        isOpen={isReportOpen}
+        onClose={() => setIsReportOpen(false)}
+        questionId={String(questionIndices[currentIdx] ?? currentIdx)}
+        question={question}
+      />
     </div>
   );
 }

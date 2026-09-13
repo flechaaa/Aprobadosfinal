@@ -1,16 +1,26 @@
-import { useState, useEffect } from 'react';
-import { Trophy, RefreshCw, Check, X, Swords, Home } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Trophy, RefreshCw, Check, X, Swords, Home, Save, Medal, GraduationCap, Download, Share2, Camera } from 'lucide-react';
+import { toBlob } from 'html-to-image';
 import { getAllQuestions, encodeChallenge } from '@/utils/game';
-import type { AnswerRecord, ChallengeData } from '@/types';
+import { saveRankingScore } from '@/utils/rankings';
+import { ensureTaxonomyFromSubmission } from '@/utils/moderation';
+import type { AnswerRecord, ChallengeData, Chair, Subject, University } from '@/types';
+import type { TaxonomySelection } from '@/components/TaxonomyPicker';
 import { AdBanner } from './AdBanner';
+import { RankingModal } from '@/components/RankingModal';
 
 interface ResultsScreenProps {
   answers: AnswerRecord[];
   questionIndices: number[];
   playerName: string;
   challengeData: ChallengeData | null;
+  selection: TaxonomySelection | null;
+  universities: University[];
+  subjects: Subject[];
+  chairs: Chair[];
   onRestart: () => void;
   onHome: () => void;
+  onTaxonomyRefresh?: () => Promise<void> | void;
 }
 
 function WhatsAppIcon({ className }: { className?: string }) {
@@ -43,15 +53,100 @@ export function ResultsScreen({
   questionIndices,
   playerName,
   challengeData,
+  selection,
+  universities,
+  subjects,
+  chairs,
   onRestart,
   onHome,
+  onTaxonomyRefresh,
 }: ResultsScreenProps) {
   const totalPoints = answers.reduce((sum, a) => sum + a.points, 0);
   const correctCount = answers.filter((a) => a.correct).length;
+  const accuracyPercentage = answers.length ? Math.round((correctCount / answers.length) * 100) : 0;
+  const approved = accuracyPercentage >= 60;
   const animatedScore = useCountUp(totalPoints, 1200);
   const [shareUrl, setShareUrl] = useState('');
+  const [playerAlias, setPlayerAlias] = useState(playerName.trim() || 'Anónimo');
+  const [savingScore, setSavingScore] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [rankingOpen, setRankingOpen] = useState(false);
+  const [rankingPosition, setRankingPosition] = useState<number | null>(null);
+  const [downloadFallbackMessage, setDownloadFallbackMessage] = useState('');
+  const [showFailureStamp, setShowFailureStamp] = useState(false);
+  const storyCardRef = useRef<HTMLDivElement | null>(null);
+  const failAudioRef = useRef<HTMLAudioElement | null>(null);
+  const failStampTimerRef = useRef<number | undefined>(undefined);
 
   const allQuestions = getAllQuestions();
+  const selectedUniversity = universities.find((u) => u.id === selection?.universityId)?.name ?? 'Universidad';
+  const selectedSubject = subjects.find((s) => s.id === selection?.subjectId)?.name ?? 'Materia';
+  const selectedChair = chairs.find((c) => c.id === selection?.chairId)?.name ?? 'Cátedra';
+
+  const handleDownloadStory = async () => {
+    if (!storyCardRef.current) return;
+
+    try {
+      const blob = await toBlob(storyCardRef.current, {
+        cacheBust: true,
+        pixelRatio: 2,
+        skipFonts: false,
+        type: 'image/png',
+      });
+
+      if (!blob) {
+        throw new Error('No se pudo convertir la tarjeta a imagen.');
+      }
+
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.download = `mi-puntaje-trivia.png`;
+      link.href = url;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Error generando imagen del story:', err);
+      setSaveError('No se pudo generar la imagen del Story.');
+    }
+  };
+
+  const handleShareStoryToInstagram = async () => {
+    if (!storyCardRef.current) {
+      return;
+    }
+
+    try {
+      const blob = await toBlob(storyCardRef.current, {
+        cacheBust: true,
+        pixelRatio: 2,
+        skipFonts: false,
+        type: 'image/png',
+      });
+
+      if (!blob) {
+        throw new Error('No se pudo crear la imagen del Story.');
+      }
+
+      const file = new File([blob], 'mi-puntaje-trivia.png', { type: 'image/png' });
+      if (typeof navigator !== 'undefined' && 'canShare' in navigator && typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: 'Mi puntaje en la Trivia',
+          text: '¡Mirá cómo me fue en la trivia de estudiantes!',
+        });
+      } else {
+        await handleDownloadStory();
+        setDownloadFallbackMessage('Tu navegador no soporta compartir archivos. La imagen se descargó para subirla manualmente a Instagram Historias.');
+      }
+    } catch (err) {
+      console.error('Error compartiendo la tarjeta de story:', err);
+      await handleDownloadStory();
+      setDownloadFallbackMessage('No se pudo abrir el menú de Instagram desde aquí. La imagen se descargó para subirla manualmente.');
+    }
+  };
 
   useEffect(() => {
     const data: ChallengeData = { q: questionIndices, n: playerName, s: totalPoints };
@@ -59,6 +154,85 @@ export function ResultsScreen({
     const url = `${window.location.origin}${window.location.pathname}?c=${encoded}`;
     setShareUrl(url);
   }, [questionIndices, playerName, totalPoints]);
+
+  const playAudio = (url: string) => {
+    try {
+      const audio = new Audio(url);
+      audio.volume = 0.8;
+      void audio.play().catch(() => {
+        console.info('La reproducción automática fue bloqueada por el navegador.');
+      });
+    } catch (error) {
+      console.info('No se pudo inicializar el audio de feedback.', error);
+    }
+  };
+
+  const launchVictoryEffects = () => {
+    playAudio('https://www.myinstants.com/media/sounds/tada.mp3');
+  };
+
+  const launchDefeatEffects = () => {
+    const audio = new Audio('https://www.myinstants.com/media/sounds/sadtrombone.mp3');
+    audio.volume = 0.8;
+    failAudioRef.current = audio;
+    void audio.play().catch(() => {
+      console.info('La reproducción automática bloqueada por el navegador para la derrota.');
+    });
+
+    setShowFailureStamp(true);
+    if (failStampTimerRef.current) {
+      clearTimeout(failStampTimerRef.current);
+    }
+
+    failStampTimerRef.current = window.setTimeout(() => {
+      setShowFailureStamp(false);
+      if (failAudioRef.current) {
+        failAudioRef.current.pause();
+        failAudioRef.current.currentTime = 0;
+        failAudioRef.current = null;
+      }
+    }, 2600);
+  };
+
+  useEffect(() => {
+    if (approved) {
+      launchVictoryEffects();
+    } else {
+      launchDefeatEffects();
+    }
+
+    return () => {
+      if (failStampTimerRef.current) {
+        clearTimeout(failStampTimerRef.current);
+      }
+      if (failAudioRef.current) {
+        failAudioRef.current.pause();
+        failAudioRef.current.currentTime = 0;
+      }
+    };
+  }, [approved]);
+
+  const clearFailureEffects = () => {
+    if (failStampTimerRef.current) {
+      clearTimeout(failStampTimerRef.current);
+    }
+    if (failAudioRef.current) {
+      failAudioRef.current.pause();
+      failAudioRef.current.currentTime = 0;
+      failAudioRef.current = null;
+    }
+    setShowFailureStamp(false);
+  };
+
+  const handleRestart = () => {
+    clearFailureEffects();
+    onRestart();
+  };
+
+  const handleHome = () => {
+    clearFailureEffects();
+    onHome();
+  };
 
   const handleWhatsAppShare = () => {
     const message = `¡Te desafío a superar mis ${totalPoints} puntos en Aprobados! ¿Podrás ganarle a un estudiante de medicina? ${shareUrl}`;
@@ -83,8 +257,57 @@ export function ResultsScreen({
 
   const rating = getRating();
 
+  const handleSaveScore = async () => {
+    if (!selection || !selection.chairId || selection.chairId === 'all') {
+      return;
+    }
+
+    setSaveError('');
+    setSaveSuccess(false);
+    setSavingScore(true);
+
+    try {
+      const taxonomy = await ensureTaxonomyFromSubmission({
+        university: selectedUniversity,
+        subject: selectedSubject,
+        chair: selectedChair,
+      });
+
+      const result = await saveRankingScore({
+        chairId: taxonomy.chairId,
+        playerName: playerAlias,
+        score: totalPoints,
+      });
+
+      setRankingPosition(result.position);
+      setSaveSuccess(true);
+
+      if (onTaxonomyRefresh) {
+        await Promise.resolve(onTaxonomyRefresh());
+      }
+    } catch (err) {
+      console.error('Error guardando puntaje o asegurando taxonomía:', err);
+      setSaveError('No pudimos guardar el puntaje. Intentá nuevamente.');
+    } finally {
+      setSavingScore(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-teal-50">
+      {!approved && showFailureStamp && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-red-950/25 pointer-events-none">
+          <div className="text-center">
+            <div className="relative">
+              <div className="font-black text-[14rem] leading-none text-red-600 drop-shadow-[0_0_80px_rgba(239,68,68,0.95)] transform scale-[1.12] animate-[zoom-in_600ms_ease-out]" style={{ fontFamily: 'Impact, Haettenschweiler, "Arial Black", sans-serif' }}>
+                F
+              </div>
+              <div className="absolute left-1/2 top-1/2 h-40 w-40 -translate-x-1/2 -translate-y-1/2 rounded-full border-4 border-red-300/60" />
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-2xl mx-auto px-4 py-8">
         {/* Score card */}
         <div className="bg-white rounded-3xl shadow-xl p-8 text-center animate-pop-in mb-6">
@@ -118,6 +341,13 @@ export function ResultsScreen({
               <p className="text-sm text-gray-500">Puntos</p>
             </div>
           </div>
+
+          {rankingPosition && (
+            <div className="mt-4 rounded-2xl bg-teal-50 border border-teal-200 px-4 py-3">
+              <p className="text-sm font-black uppercase tracking-wide text-teal-700">Ranking</p>
+              <p className="text-lg font-extrabold text-gray-900">¡Quedaste en el Puesto #{rankingPosition} del ranking!</p>
+            </div>
+          )}
         </div>
 
         {/* Challenge comparison */}
@@ -165,6 +395,124 @@ export function ResultsScreen({
                 ? '¡Empate!'
                 : `${challengeData!.n} te superó por ahora`}
             </p>
+          </div>
+        )}
+
+        {/* Story card preview */}
+        {selection && selection.chairId && selection.chairId !== 'all' && (
+          <div className="bg-white rounded-3xl shadow-xl p-4 mb-6">
+            <div
+              ref={storyCardRef}
+              className="relative overflow-hidden rounded-3xl border-4 border-teal-700 bg-gradient-to-br from-teal-950 via-teal-900 to-emerald-700 p-8 text-white shadow-xl"
+              style={{ minHeight: 280 }}
+            >
+              <div className="absolute inset-0 opacity-20">
+                <div className="absolute -left-12 top-0 h-40 w-40 rounded-full bg-white blur-3xl" />
+                <div className="absolute right-0 bottom-0 h-48 w-48 rounded-full bg-emerald-200 blur-3xl" />
+              </div>
+
+              <div className="relative z-10 flex items-start justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-14 h-14 rounded-2xl bg-white/15 flex items-center justify-center ring-2 ring-white/60">
+                    <GraduationCap className="w-8 h-8 text-white" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-[0.2em] text-teal-100">Aprobados</p>
+                    <h3 className="text-2xl font-black leading-tight">{selectedUniversity}</h3>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="text-[11px] font-black uppercase tracking-[0.2em] text-teal-100">Ranking</span>
+                  <span className="block text-2xl font-black">#{rankingPosition ?? '—'}</span>
+                </div>
+              </div>
+
+              <div className="relative z-10 mt-7">
+                <div className="inline-flex items-center gap-2 rounded-full bg-white/15 px-4 py-2 text-xs font-black uppercase tracking-wide">
+                  <Trophy className="w-4 h-4" />
+                  {selectedSubject}
+                </div>
+                <div className="mt-2">
+                  <p className="text-xs font-black uppercase tracking-wide text-teal-100">Cátedra</p>
+                  <p className="text-lg font-black">{selectedChair}</p>
+                </div>
+              </div>
+
+              <div className="relative z-10 mt-8 flex items-end justify-between gap-4">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.2em] text-teal-100">Puntaje final</p>
+                  <p className="text-5xl font-black leading-none">{totalPoints}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs font-black uppercase tracking-[0.2em] text-teal-100">Mi puesto</p>
+                  <p className="text-3xl font-black">#{rankingPosition ?? '—'}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={handleDownloadStory}
+                className="inline-flex items-center justify-center gap-2 bg-teal-600 text-white font-bold px-4 py-3 rounded-2xl hover:bg-teal-700 transition shadow-md"
+              >
+                <Download className="w-4 h-4" />
+                Descargar Imagen
+              </button>
+              <button
+                type="button"
+                onClick={handleShareStoryToInstagram}
+                className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-[#F58529] via-[#DD2A7B] to-[#8134AF] text-white font-bold px-4 py-3 rounded-2xl hover:opacity-90 transition shadow-md"
+              >
+                <Camera className="w-4 h-4" />
+                Compartir en historias de Instagram
+              </button>
+            </div>
+
+            {downloadFallbackMessage && (
+              <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800">
+                {downloadFallbackMessage}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Ranking save row */}
+        {selection && selection.chairId && selection.chairId !== 'all' && (
+          <div className="bg-white rounded-3xl shadow-xl p-6 mb-6">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex-1 min-w-[170px]">
+                <label className="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">Tu nombre/apodo</label>
+                <input
+                  value={playerAlias}
+                  onChange={(e) => setPlayerAlias(e.target.value)}
+                  maxLength={50}
+                  className="w-full rounded-2xl border-2 border-gray-200 px-4 py-3 text-gray-800 outline-none focus:border-teal-500"
+                  placeholder="Ingresá tu apodo"
+                />
+              </div>
+              <div className="flex gap-2 items-end">
+                <button
+                  type="button"
+                  disabled={savingScore}
+                  onClick={handleSaveScore}
+                  className="inline-flex items-center justify-center gap-2 bg-teal-600 text-white font-bold px-5 py-3 rounded-2xl hover:bg-teal-700 transition shadow-md disabled:opacity-60"
+                >
+                  <Save className="w-4 h-4" />
+                  {savingScore ? 'Guardando...' : 'Guardar puntaje'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRankingOpen(true)}
+                  className="inline-flex items-center justify-center gap-2 bg-white border-2 border-teal-200 text-teal-700 font-bold px-5 py-3 rounded-2xl hover:bg-teal-50 transition"
+                >
+                  <Medal className="w-4 h-4" />
+                  Top 10
+                </button>
+              </div>
+            </div>
+            {saveError && <p className="mt-3 text-sm font-bold text-red-600">{saveError}</p>}
+            {saveSuccess && <p className="mt-3 text-sm font-bold text-green-700">Puntaje guardado con éxito.</p>}
           </div>
         )}
 
@@ -218,7 +566,7 @@ export function ResultsScreen({
 
           {/* 2. Jugar de nuevo con la misma materia */}
           <button
-            onClick={onRestart}
+            onClick={handleRestart}
             className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-4 rounded-xl transition-all shadow-md hover:shadow-lg active:scale-[0.98] flex items-center justify-center gap-2"
           >
             <RefreshCw className="w-5 h-5" />
@@ -227,13 +575,15 @@ export function ResultsScreen({
 
           {/* 3. Volver al menú principal */}
           <button
-            onClick={onHome}
+            onClick={handleHome}
             className="w-full bg-white border-2 border-gray-200 hover:border-gray-400 text-gray-700 font-bold py-4 rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-2"
           >
             <Home className="w-5 h-5 text-gray-500" />
             Volver al menú principal
           </button>
         </div>
+
+        <RankingModal open={rankingOpen} chairId={selection?.chairId ?? null} chairs={chairs} onClose={() => setRankingOpen(false)} />
 
         {/* Ad banner */}
         <AdBanner />

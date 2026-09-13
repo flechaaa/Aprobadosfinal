@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
-import { Upload, X, FileText, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import { Upload, X, FileText, CheckCircle2, AlertCircle, Loader2, Bell } from 'lucide-react';
 import { uploadSubmission, validateFile, type MaterialType } from '@/utils/submissions';
+import { notificationSupported, requestNotificationPermission, registerBrowserPushSubscription, getOrCreateSessionId } from '@/utils/notifications';
 
 interface CollaborateModalProps {
   open: boolean;
@@ -25,6 +26,8 @@ export function CollaborateModal({ open, onClose }: CollaborateModalProps) {
   const [progress, setProgress] = useState(0);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
+  const [notifyWhenApproved, setNotifyWhenApproved] = useState(false);
+  const [notifyStatus, setNotifyStatus] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
   const resetForm = useCallback(() => {
@@ -78,6 +81,21 @@ export function CollaborateModal({ open, onClose }: CollaborateModalProps) {
     }, 300);
 
     try {
+      if (notifyWhenApproved && notificationSupported()) {
+        const permission = await requestNotificationPermission();
+        if (permission === 'granted') {
+          try {
+            await registerBrowserPushSubscription(getOrCreateSessionId());
+            setNotifyStatus('Notificación autorizada.');
+          } catch (registerErr) {
+            console.warn('No se pudo registrar la subscripción push:', registerErr);
+            setNotifyStatus('Se guardó el envío, pero la notificación no pudo registrarse.');
+          }
+        } else {
+          setNotifyStatus('La notificación quedó deshabilitada en este navegador.');
+        }
+      }
+
       await uploadSubmission({
         university: university.trim(),
         subject: subject.trim(),
@@ -218,6 +236,22 @@ export function CollaborateModal({ open, onClose }: CollaborateModalProps) {
                     </label>
                   ))}
                 </div>
+              </div>
+
+              <div className="rounded-2xl border-2 border-teal-100 bg-teal-50/50 p-4">
+                <label className="flex items-center justify-between gap-3 cursor-pointer">
+                  <span className="flex items-center gap-2 text-sm font-black text-gray-800">
+                    <Bell className="h-4 w-4 text-teal-600" />
+                    Recibir notificación cuando se apruebe
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={notifyWhenApproved}
+                    onChange={(e) => setNotifyWhenApproved(e.target.checked)}
+                    className="accent-teal-600 h-4 w-4"
+                  />
+                </label>
+                {notifyStatus && <p className="mt-2 text-xs font-semibold text-teal-700">{notifyStatus}</p>}
               </div>
 
               {/* Drag & Drop */}

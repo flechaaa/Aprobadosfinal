@@ -14,6 +14,7 @@ REGLAS CRÍTICAS:
 3. Extraé absolutamente todas las preguntas (si hay 20 o 25, extraé todas).
 4. 'correcta' debe ser el índice numérico de la opción correcta: 0 para la primera (A), 1 para la segunda (B), 2 para la tercera (C), 3 para la cuarta (D).
 5. Proporcioná una breve justificación médica en 'explicacion'.
+6. Si en el texto aparece una universidad, materia o cátedra escrita con tildes, acentos, mayúsculas, abreviaturas o espacios extra, normalizá la entidad de salida a la versión oficial canónica y limpia (por ejemplo: 'uba', 'u.b.a' o 'Universidad de Buenos Aires' -> 'Universidad de Buenos Aires'; 'Médicina' -> 'Medicina'; 'Fundación' -> 'Fundacion' si la forma canónica del material usa esa salida, o la versión con acentos eliminados según la base esperada).
 
 Devolvé estrictamente un JSON válido con este formato exacto:
 {
