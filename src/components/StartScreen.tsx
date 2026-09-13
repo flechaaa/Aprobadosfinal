@@ -16,9 +16,10 @@ interface StartScreenProps {
   taxonomyError: string;
   totalQuestions: number;
   onOpenAdmin: () => void;
+  questionsLoadError?: string;
 }
 
-export function StartScreen({ onStart, challengeData, universities, subjects, chairs, taxonomyError, totalQuestions, onOpenAdmin }: StartScreenProps) {
+export function StartScreen({ onStart, challengeData, universities, subjects, chairs, taxonomyError, totalQuestions, onOpenAdmin, questionsLoadError }: StartScreenProps) {
   const [name, setName] = useState('');
   const [selection, setSelection] = useState<TaxonomySelection>({ universityId: '', subjectId: '', chairId: '' });
   const [collaborateOpen, setCollaborateOpen] = useState(false);
@@ -78,6 +79,7 @@ export function StartScreen({ onStart, challengeData, universities, subjects, ch
             </div>
             <TaxonomyPicker universities={universities} subjects={subjects} chairs={chairs} value={selection} onChange={setSelection} />
             {taxonomyError && <p className="mt-3 rounded-xl bg-amber-50 p-3 text-xs font-semibold text-amber-800">{taxonomyError}</p>}
+            {questionsLoadError && <p className="mt-3 rounded-xl bg-rose-50 p-3 text-xs font-bold text-rose-700 border border-rose-200">{questionsLoadError}</p>}
           </div>
 
           <input

@@ -26,6 +26,7 @@ function App() {
   const [chairs, setChairs] = useState<Chair[]>([]);
   const [totalQuestions, setTotalQuestions] = useState(0);
   const [taxonomyError, setTaxonomyError] = useState('');
+  const [questionsLoadError, setQuestionsLoadError] = useState('');
 
   const fetchQuestionCount = useCallback(async () => {
     const { count, error } = await supabase
@@ -68,16 +69,28 @@ function App() {
   const handleStart = async (name: string, selection: TaxonomySelection) => {
     setPlayerName(name);
     setCurrentSelection(selection);
+    setQuestionsLoadError('');
 
     if (challengeData) {
       setQuestionIndices(challengeData.q);
       setQuestions([]);
-    } else {
-      // Cargar preguntas de Supabase según la materia y cátedra seleccionada
-      const loadedQuestions = await loadQuestionsForGame(selection);
-      setQuestions(loadedQuestions);
-      setQuestionIndices(loadedQuestions.map((_, i) => i));
+      setScreen('game');
+      return;
     }
+
+    // Cargar preguntas de Supabase según la materia y cátedra seleccionada.
+    const loadedQuestions = await loadQuestionsForGame(selection);
+
+    if (loadedQuestions.length === 0) {
+      setQuestions([]);
+      setQuestionIndices([]);
+      setQuestionsLoadError('Próximamente preguntas para esta cátedra');
+      setScreen('start');
+      return;
+    }
+
+    setQuestions(loadedQuestions);
+    setQuestionIndices(loadedQuestions.map((_, i) => i));
     setScreen('game');
   };
 
@@ -104,6 +117,7 @@ function App() {
     setAnswers([]);
     setQuestionIndices([]);
     setQuestions([]);
+    setQuestionsLoadError('');
     setChallengeData(null);
     setPlayerName('');
     window.history.replaceState({}, '', window.location.pathname);
@@ -123,6 +137,7 @@ function App() {
           taxonomyError={taxonomyError}
           totalQuestions={totalQuestions}
           onOpenAdmin={() => setScreen('admin')}
+          questionsLoadError={questionsLoadError}
         />
       )}
       {screen === 'game' && (
