@@ -13,7 +13,10 @@ export interface ChallengeData {
 
 export interface AnswerRecord {
   questionIndex: number;
+  questionText: string;
+  questionOptions: string[];
   selectedIndex: number | null;
+  selectedOption: string | null;
   correct: boolean;
   timeLeft: number;
   points: number;

@@ -6,7 +6,7 @@ import { AdminPanel } from '@/components/AdminPanel';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { supabase } from '@/lib/supabase';
 import { loadTaxonomy } from '@/utils/taxonomy';
-import { selectRandomQuestions, decodeChallenge, loadQuestionsForGame } from '@/utils/game';
+import { selectRandomQuestions, decodeChallenge, loadQuestionsForGame, loadRandomQuestionsForGame } from '@/utils/game';
 import type { AnswerRecord, Chair, ChallengeData, Question, Subject, University } from '@/types';
 import type { TaxonomySelection } from '@/components/TaxonomyPicker';
 
@@ -94,6 +94,25 @@ function App() {
     setScreen('game');
   };
 
+  const handleQuickGame = async (name: string) => {
+    setPlayerName(name);
+    setCurrentSelection(null);
+    setQuestionsLoadError('');
+
+    const loadedQuestions = await loadRandomQuestionsForGame();
+    if (loadedQuestions.length === 0) {
+      setQuestions([]);
+      setQuestionIndices([]);
+      setQuestionsLoadError('No hay preguntas disponibles en la base de datos.');
+      setScreen('start');
+      return;
+    }
+
+    setQuestions(loadedQuestions);
+    setQuestionIndices(loadedQuestions.map((_, i) => i));
+    setScreen('game');
+  };
+
   const handleFinish = (gameAnswers: AnswerRecord[]) => {
     setAnswers(gameAnswers);
     setScreen('results');
@@ -130,6 +149,7 @@ function App() {
       {screen === 'start' && (
         <StartScreen
           onStart={handleStart}
+          onQuickGame={handleQuickGame}
           challengeData={challengeData}
           universities={universities}
           subjects={subjects}

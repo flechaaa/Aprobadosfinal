@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Trophy, RefreshCw, Check, X, Swords, Home, Save, Medal, GraduationCap, Download, Share2, Camera } from 'lucide-react';
 import { toBlob } from 'html-to-image';
-import { getAllQuestions, encodeChallenge } from '@/utils/game';
+import { encodeChallenge } from '@/utils/game';
 import { saveRankingScore } from '@/utils/rankings';
 import { ensureTaxonomyFromSubmission } from '@/utils/moderation';
 import type { AnswerRecord, ChallengeData, Chair, Subject, University } from '@/types';
@@ -79,7 +79,6 @@ export function ResultsScreen({
   const failAudioRef = useRef<HTMLAudioElement | null>(null);
   const failStampTimerRef = useRef<number | undefined>(undefined);
 
-  const allQuestions = getAllQuestions();
   const selectedUniversity = universities.find((u) => u.id === selection?.universityId)?.name ?? 'Universidad';
   const selectedSubject = subjects.find((s) => s.id === selection?.subjectId)?.name ?? 'Materia';
   const selectedChair = chairs.find((c) => c.id === selection?.chairId)?.name ?? 'Cátedra';
@@ -521,7 +520,10 @@ export function ResultsScreen({
           <h3 className="font-bold text-gray-800 mb-4">Repaso de respuestas</h3>
           <div className="space-y-3">
             {answers.map((answer, i) => {
-              const q = allQuestions[answer.questionIndex];
+              const selectedText = answer.selectedIndex === null
+                ? 'Sin respuesta'
+                : answer.selectedOption ?? answer.questionOptions[answer.selectedIndex] ?? 'Opción no disponible';
+
               return (
                 <div key={i} className="flex items-start gap-3 p-3 rounded-xl bg-gray-50">
                   <div
@@ -537,14 +539,15 @@ export function ResultsScreen({
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-gray-800 line-clamp-2">
-                      {q?.pregunta ?? 'Pregunta'}
+                      {answer.questionText ?? 'Pregunta'}
                     </p>
                     <p className="text-xs text-gray-500 mt-0.5">
                       {answer.correct
-                        ? `+${answer.points} pts`
-                        : answer.selectedIndex === null
-                        ? 'Sin respuesta'
-                        : 'Sin puntos'}
+                        ? `Correcta • +${answer.points} pts`
+                        : `Incorrecta • ${selectedText}`}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      Opción elegida: {selectedText}
                     </p>
                   </div>
                 </div>

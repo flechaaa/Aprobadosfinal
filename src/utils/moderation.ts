@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase';
-import { canonicalizeTaxonomyName, normalizeTaxonomyText } from '@/utils/taxonomy';
+import { canonicalizeTaxonomyName, normalizeString, normalizeTaxonomyText } from '@/utils/taxonomy';
 
 const COMMON_WORDS = new Set([
   'instituto',
@@ -109,8 +109,8 @@ export async function loadPendingSubmissions(): Promise<Submission[]> {
 }
 
 function findByNormalizedName<T extends { id: string; name: string }>(rows: T[], target: string) {
-  const targetKey = normalizeTaxonomyText(target);
-  return rows.find((row) => normalizeTaxonomyText(row.name) === targetKey) ?? null;
+  const targetKey = normalizeString(target);
+  return rows.find((row) => normalizeString(row.name) === targetKey) ?? null;
 }
 
 /**
@@ -155,9 +155,13 @@ export async function ensureTaxonomyFromSubmission(
   const { data: subjects } = await supabase.from('subjects').select('id, university_id, name');
   const { data: chairs } = await supabase.from('chairs').select('id, subject_id, name');
 
-  let uni = findNearMatch(universities ?? [], uniName) ?? findByNormalizedName(universities ?? [], uniName);
+  const universityRows = universities ?? [];
+  const subjectRows = subjects ?? [];
+  const chairRows = chairs ?? [];
+
+  let uni = findNearMatch(universityRows, uniName) ?? findByNormalizedName(universityRows, uniName);
   if (!uni) {
-    const polishedUni = formatInstitutionName(uniName);
+    const polishedUni = formatInstitutionName(canonicalizeTaxonomyName('university', uniName));
     const { data: newUni, error: errUni } = await supabase
       .from('universities')
       .insert({ name: polishedUni })
@@ -167,13 +171,12 @@ export async function ensureTaxonomyFromSubmission(
     uni = newUni;
   }
 
-  let subj = (subjects ?? []).find((row) => row.university_id === uni!.id && normalizeTaxonomyText(row.name) === normalizeTaxonomyText(subjName)) ?? findNearMatch(
-    (subjects ?? []).filter((row) => row.university_id === uni!.id && row.name),
-    subjName
-  ) ?? null;
+  let subj = (subjectRows ?? []).find((row) => row.university_id === uni!.id && normalizeString(row.name) === normalizeString(subjName))
+    ?? findNearMatch((subjectRows ?? []).filter((row) => row.university_id === uni!.id && row.name), subjName)
+    ?? null;
 
   if (!subj) {
-    const polishedSubject = formatInstitutionName(subjName);
+    const polishedSubject = formatInstitutionName(canonicalizeTaxonomyName('subject', subjName));
     const { data: newSubj, error: errSubj } = await supabase
       .from('subjects')
       .insert({ university_id: uni!.id, name: polishedSubject })
@@ -183,13 +186,12 @@ export async function ensureTaxonomyFromSubmission(
     subj = newSubj;
   }
 
-  let ch = (chairs ?? []).find((row) => row.subject_id === subj!.id && normalizeTaxonomyText(row.name) === normalizeTaxonomyText(chairName)) ?? findNearMatch(
-    (chairs ?? []).filter((row) => row.subject_id === subj!.id && row.name),
-    chairName
-  ) ?? null;
+  let ch = (chairRows ?? []).find((row) => row.subject_id === subj!.id && normalizeString(row.name) === normalizeString(chairName))
+    ?? findNearMatch((chairRows ?? []).filter((row) => row.subject_id === subj!.id && row.name), chairName)
+    ?? null;
 
   if (!ch) {
-    const polishedChair = formatInstitutionName(chairName);
+    const polishedChair = formatInstitutionName(canonicalizeTaxonomyName('chair', chairName));
     const { data: newCh, error: errCh } = await supabase
       .from('chairs')
       .insert({ subject_id: subj!.id, name: polishedChair })

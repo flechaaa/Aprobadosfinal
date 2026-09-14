@@ -69,9 +69,14 @@ export function GameScreen({ questions: customQuestions, questionIndices, onFini
     answeredRef.current = true;
     const correct = idx !== null && idx === question.correcta;
     const points = correct ? calculatePoints(timeLeft) : 0;
+    const selectedOption = idx === null ? null : question.opciones[idx] ?? null;
+
     const answer: AnswerRecord = {
       questionIndex: questionIndices[currentIdx] ?? currentIdx,
+      questionText: question.pregunta,
+      questionOptions: question.opciones,
       selectedIndex: idx,
+      selectedOption,
       correct,
       timeLeft,
       points,

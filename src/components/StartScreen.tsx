@@ -9,6 +9,7 @@ import type { Chair, ChallengeData, Subject, University } from '@/types';
 
 interface StartScreenProps {
   onStart: (name: string, selection: TaxonomySelection) => void;
+  onQuickGame: (name: string) => void;
   challengeData: ChallengeData | null;
   universities: University[];
   subjects: Subject[];
@@ -19,7 +20,7 @@ interface StartScreenProps {
   questionsLoadError?: string;
 }
 
-export function StartScreen({ onStart, challengeData, universities, subjects, chairs, taxonomyError, totalQuestions, onOpenAdmin, questionsLoadError }: StartScreenProps) {
+export function StartScreen({ onStart, onQuickGame, challengeData, universities, subjects, chairs, taxonomyError, totalQuestions, onOpenAdmin, questionsLoadError }: StartScreenProps) {
   const [name, setName] = useState('');
   const [selection, setSelection] = useState<TaxonomySelection>({ universityId: '', subjectId: '', chairId: '' });
   const [collaborateOpen, setCollaborateOpen] = useState(false);
@@ -69,9 +70,15 @@ export function StartScreen({ onStart, challengeData, universities, subjects, ch
 
         {/* Card */}
         <div className="bg-white rounded-3xl shadow-2xl p-6 animate-slide-up">
-          <label className="block text-sm font-semibold text-gray-700 mb-2">
-            Tu nombre
-          </label>
+          <div className="mb-4">
+            <button
+              type="button"
+              onClick={() => onQuickGame(name.trim() || 'Anónimo')}
+              className="w-full rounded-2xl bg-gradient-to-r from-fuchsia-600 via-rose-500 to-amber-500 px-4 py-3 text-sm font-black uppercase tracking-wide text-white shadow-lg hover:scale-[1.015] hover:shadow-xl transition-all"
+            >
+              Partida Rápida
+            </button>
+          </div>
           <div className="mb-5 border-t border-gray-100 pt-5">
             <div className="mb-3">
               <p className="text-sm font-bold text-gray-800">Elegí tu clasificación</p>
@@ -111,7 +118,7 @@ export function StartScreen({ onStart, challengeData, universities, subjects, ch
 
           <button type="button" onClick={() => setCollaborateOpen(true)} className="mt-4 w-full flex items-center justify-center gap-2 rounded-xl border-2 border-teal-200 bg-teal-50 py-3 text-sm font-bold text-teal-700 transition hover:bg-teal-100 active:scale-[0.98]">
             <Upload className="h-4 w-4" />
-            Colaborar / Enviar material
+            Enviar material
           </button>
 
           <button type="button" onClick={onOpenAdmin} className="mt-3 w-full text-xs font-bold text-gray-400 transition hover:text-teal-700">Panel de administración</button>

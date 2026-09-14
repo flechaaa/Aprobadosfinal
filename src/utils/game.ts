@@ -20,12 +20,16 @@ export async function loadQuestionsForGame(selection: {
   chairId: string;
 }): Promise<Question[]> {
   try {
-    console.log('Iniciando carga de preguntas para:', selection);
+    console.log('[loadQuestionsForGame] filtros de entrada:', {
+      chair_id: selection.chairId || null,
+      subject_id: selection.subjectId || null,
+      university_id: selection.universityId || null,
+    });
 
     let questionsData: any[] = [];
-    const fieldsToSelect = 'id, question, options, correct_option, explanation, chair_id, subject';
+    const fieldsToSelect = 'id, question, options, correct_option, explanation, chair_id, subject, university, chair';
 
-    // 1. Si eligió una cátedra específica, buscar por chair_id
+    // 1) Si el árbol ya trae una cátedra exacta, consultamos sólo por ese chair_id.
     if (selection.chairId && selection.chairId !== 'all') {
       const { data, error } = await supabase
         .from('questions')
@@ -34,82 +38,53 @@ export async function loadQuestionsForGame(selection: {
 
       if (error) {
         console.error('[loadQuestionsForGame] Error al consultar Supabase por chair_id:', selection.chairId, error);
-      }
-
-      if (!error && data && data.length > 0) {
+      } else if (data && data.length > 0) {
         questionsData = data;
+        console.log('[loadQuestionsForGame] coincidencias exactas por chair_id:', selection.chairId, data.length);
       } else {
-        console.error('[loadQuestionsForGame] Sin resultados en Supabase para chair_id=', selection.chairId, 'subjectId=', selection.subjectId, 'universityId=', selection.universityId);
+        console.warn('[loadQuestionsForGame] sin coincidencias exactas por chair_id=', selection.chairId);
       }
     }
 
-    // 2. Si no hay preguntas por cátedra exacta (o eligió "Todas"), buscar por cátedras de esa materia
+    // 2) Si no apareció el chair_id directo, resolve el subject_id a su nombre
+    //    y hacemos un filtro de materia estricto, con una rama exclusiva para Infectología.
     if (questionsData.length === 0 && selection.subjectId) {
-      const { data: chairsData, error: chairsError } = await supabase
-        .from('chairs')
-        .select('id')
-        .eq('subject_id', selection.subjectId);
-
-      if (chairsError) {
-        console.error('[loadQuestionsForGame] Error al consultar chairs para subject_id=', selection.subjectId, chairsError);
-      }
-
-      const chairIds = (chairsData || []).map((c) => c.id);
-
-      if (chairIds.length === 0) {
-        console.error('[loadQuestionsForGame] No se encontraron chairs para subject_id=', selection.subjectId, 'en Supabase.');
-      }
-
-      if (chairIds.length > 0) {
-        const { data: matQuestions, error: matErr } = await supabase
-          .from('questions')
-          .select(fieldsToSelect)
-          .in('chair_id', chairIds);
-
-        if (matErr) {
-          console.error('[loadQuestionsForGame] Error al consultar Supabase por subject_id=', selection.subjectId, 'chairIds=', chairIds, matErr);
-        }
-
-        if (!matErr && matQuestions && matQuestions.length > 0) {
-          questionsData = matQuestions;
-        } else {
-          console.error('[loadQuestionsForGame] Sin resultados en Supabase para subject_id=', selection.subjectId, 'chairIds=', chairIds);
-        }
-      }
-    }
-
-    // 3. Respaldo por texto: buscar directamente por el nombre de la materia en la tabla questions
-    if (questionsData.length === 0 && selection.subjectId) {
-      const { data: subObj, error: subObjErr } = await supabase
+      const { data: subjectData, error: subjectError } = await supabase
         .from('subjects')
         .select('name')
         .eq('id', selection.subjectId)
         .maybeSingle();
 
-      if (subObjErr) {
-        console.error('[loadQuestionsForGame] Error al resolver nombre de subject_id=', selection.subjectId, subObjErr);
+      if (subjectError) {
+        console.error('[loadQuestionsForGame] Error al resolver subject_id:', selection.subjectId, subjectError);
       }
 
-      if (subObj?.name) {
-        const subjectName = subObj.name.trim();
-        console.log('[loadQuestionsForGame] Intentando fallback textual por subject=', subjectName);
+      if (subjectData?.name) {
+        const subjectName = subjectData.name.trim();
+        const isInfectologia = subjectName.toLowerCase().includes('infecto');
 
-        const { data: textQuestions, error: textErr } = await supabase
+        console.log('[loadQuestionsForGame] filtro de subject:', subjectName, 'isInfectologia=', isInfectologia);
+
+        let subjectQuery = supabase
           .from('questions')
-          .select(fieldsToSelect)
-          .ilike('subject', `%${subjectName}%`);
+          .select(fieldsToSelect);
 
-        if (textErr) {
-          console.error('[loadQuestionsForGame] Error al consultar Supabase por texto de subject=', subjectName, textErr);
-        }
-
-        if (!textErr && textQuestions && textQuestions.length > 0) {
-          questionsData = textQuestions;
+        if (isInfectologia) {
+          subjectQuery = subjectQuery.ilike('subject', '%Infecto%');
         } else {
-          console.error('[loadQuestionsForGame] Sin coincidencias textuales en Supabase para subject=', subjectName, 'y subject_id=', selection.subjectId);
+          subjectQuery = subjectQuery.eq('subject', subjectName);
         }
-      } else {
-        console.error('[loadQuestionsForGame] No se encontró nombre de subject para subject_id=', selection.subjectId);
+
+        const { data: subjectQuestions, error: subjectErrorRows } = await subjectQuery;
+
+        if (subjectErrorRows) {
+          console.error('[loadQuestionsForGame] Error al consultar Supabase por subject:', subjectName, subjectErrorRows);
+        } else if (subjectQuestions && subjectQuestions.length > 0) {
+          questionsData = subjectQuestions;
+          console.log('[loadQuestionsForGame] coincidencias de subject:', subjectName, subjectQuestions.length);
+        } else {
+          console.warn('[loadQuestionsForGame] sin coincidencias de subject=', subjectName);
+        }
       }
     }
 
@@ -140,6 +115,41 @@ export async function loadQuestionsForGame(selection: {
   console.error('[loadQuestionsForGame] No había preguntas en Supabase para este filtro. No se usó el fallback local de infectología.', selectionSummary);
 
   return [];
+}
+
+export async function loadRandomQuestionsForGame(count: number = QUESTIONS_PER_GAME): Promise<Question[]> {
+  try {
+    const fieldsToSelect = 'id, question, options, correct_option, explanation, chair_id, subject';
+    const { data, error } = await supabase
+      .from('questions')
+      .select(fieldsToSelect);
+
+    if (error) {
+      console.error('[loadRandomQuestionsForGame] Error al consultar Supabase:', error);
+      return [];
+    }
+
+    if (!data || data.length === 0) {
+      return [];
+    }
+
+    const mapped = data.map((q: any) => ({
+      pregunta: q.question,
+      opciones: Array.isArray(q.options)
+        ? q.options
+        : typeof q.options === 'string'
+        ? JSON.parse(q.options)
+        : [],
+      correcta: Number(q.correct_option),
+      explicacion: q.explanation || '',
+    }));
+
+    const shuffled = [...mapped].sort(() => Math.random() - 0.5);
+    return shuffled.slice(0, Math.min(count, mapped.length));
+  } catch (err) {
+    console.error('Error al cargar preguntas aleatorias de Supabase:', err);
+    return [];
+  }
 }
 
 export function selectRandomQuestions(count: number = QUESTIONS_PER_GAME): number[] {
