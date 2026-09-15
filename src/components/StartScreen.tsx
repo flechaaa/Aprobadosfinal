@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { GraduationCap, Clock, Users, Trophy, Play, Swords, Upload } from 'lucide-react';
+import { GraduationCap, Clock, Users, Trophy, Play, Swords, Upload, PlusCircle } from 'lucide-react';
 import { getAllQuestions } from '@/utils/game';
 import { TaxonomyPicker } from '@/components/TaxonomyPicker';
 import { CollaborateModal } from '@/components/CollaborateModal';
 import { RankingModal } from '@/components/RankingModal';
+import { QuestionSuggestionModal } from '@/components/QuestionSuggestionModal';
 import type { TaxonomySelection } from '@/components/TaxonomyPicker';
 import type { Chair, ChallengeData, Subject, University } from '@/types';
 
@@ -24,6 +25,7 @@ export function StartScreen({ onStart, onQuickGame, challengeData, universities,
   const [name, setName] = useState('');
   const [selection, setSelection] = useState<TaxonomySelection>({ universityId: '', subjectId: '', chairId: '' });
   const [collaborateOpen, setCollaborateOpen] = useState(false);
+  const [questionSuggestionOpen, setQuestionSuggestionOpen] = useState(false);
   const [rankingOpen, setRankingOpen] = useState(false);
 
   const canStart = Boolean(selection.universityId && selection.subjectId && selection.chairId);
@@ -116,6 +118,15 @@ export function StartScreen({ onStart, onQuickGame, challengeData, universities,
             Ver ranking
           </button>
 
+          <button
+            type="button"
+            onClick={() => setQuestionSuggestionOpen(true)}
+            className="mt-4 w-full flex items-center justify-center gap-2 rounded-xl border-2 border-emerald-200 bg-emerald-50 py-3 text-sm font-bold text-emerald-700 transition hover:bg-emerald-100 active:scale-[0.98]"
+          >
+            <PlusCircle className="h-4 w-4" />
+            Proponer una nueva pregunta
+          </button>
+
           <button type="button" onClick={() => setCollaborateOpen(true)} className="mt-4 w-full flex items-center justify-center gap-2 rounded-xl border-2 border-teal-200 bg-teal-50 py-3 text-sm font-bold text-teal-700 transition hover:bg-teal-100 active:scale-[0.98]">
             <Upload className="h-4 w-4" />
             Enviar material
@@ -132,7 +143,7 @@ export function StartScreen({ onStart, onQuickGame, challengeData, universities,
             <div className="w-1 h-1 bg-gray-300 rounded-full" />
             <div className="flex items-center gap-1.5">
               <Clock className="w-4 h-4 text-teal-600" />
-              <span>25s c/u</span>
+              <span>120s c/u</span>
             </div>
             <div className="w-1 h-1 bg-gray-300 rounded-full" />
             <div className="flex items-center gap-1.5">
@@ -149,6 +160,13 @@ export function StartScreen({ onStart, onQuickGame, challengeData, universities,
 
       <RankingModal open={rankingOpen} chairId={null} chairs={chairs} onClose={() => setRankingOpen(false)} />
       <CollaborateModal open={collaborateOpen} onClose={() => setCollaborateOpen(false)} />
+      <QuestionSuggestionModal
+        open={questionSuggestionOpen}
+        onClose={() => setQuestionSuggestionOpen(false)}
+        universities={universities}
+        subjects={subjects}
+        chairs={chairs}
+      />
     </div>
   );
 }

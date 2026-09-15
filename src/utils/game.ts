@@ -2,8 +2,69 @@ import type { Question, ChallengeData } from '@/types';
 import defaultQuestions from '@/data/Trivia_Infectologia.json';
 import { supabase } from '@/lib/supabase';
 
-const TIME_PER_QUESTION = 25;
+const TIME_PER_QUESTION = 120;
 export const QUESTIONS_PER_GAME = 5;
+
+type SupabaseQuestionRow = Record<string, unknown>;
+
+const QUESTION_FIELDS = 'question, options, correct_option, explanation, chair_id, subject_id, is_active';
+
+type QuestionFilter = {
+  column: 'chair_id' | 'subject_id';
+  operator: 'eq';
+  value: string;
+};
+
+function parseQuestionOptions(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.filter((option): option is string => typeof option === 'string').map((option) => option.trim()).filter(Boolean);
+  }
+
+  if (typeof value !== 'string' || !value.trim()) return [];
+
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed)
+      ? parsed.filter((option): option is string => typeof option === 'string').map((option) => option.trim()).filter(Boolean)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function serializeQuestion(row: SupabaseQuestionRow): Question | null {
+  if (row.is_active === false) return null;
+
+  const pregunta = typeof row.question === 'string' ? row.question.trim() : '';
+  const opciones = parseQuestionOptions(row.options);
+  const correcta = typeof row.correct_option === 'number' ? row.correct_option : Number(row.correct_option);
+
+  if (!pregunta || opciones.length !== 4 || !Number.isInteger(correcta) || correcta < 0 || correcta >= 4) {
+    return null;
+  }
+
+  return {
+    pregunta,
+    opciones,
+    correcta,
+    explicacion: typeof row.explanation === 'string' ? row.explanation : '',
+  };
+}
+
+async function queryQuestionRows(filter?: QuestionFilter): Promise<SupabaseQuestionRow[]> {
+  let query = supabase.from('questions').select(QUESTION_FIELDS).eq('is_active', true);
+  if (filter) {
+    query = query.eq(filter.column, filter.value);
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    console.warn('[queryQuestionRows] No se pudo consultar el esquema moderno de preguntas:', error);
+    return [];
+  }
+
+  return Array.isArray(data) ? (data as unknown as SupabaseQuestionRow[]) : [];
+}
 
 export function getAllQuestions(): Question[] {
   return defaultQuestions as Question[];
@@ -26,19 +87,12 @@ export async function loadQuestionsForGame(selection: {
       university_id: selection.universityId || null,
     });
 
-    let questionsData: any[] = [];
-    const fieldsToSelect = 'id, question, options, correct_option, explanation, chair_id, subject, university, chair';
-
+    let questionsData: SupabaseQuestionRow[] = [];
     // 1) Si el árbol ya trae una cátedra exacta, consultamos sólo por ese chair_id.
     if (selection.chairId && selection.chairId !== 'all') {
-      const { data, error } = await supabase
-        .from('questions')
-        .select(fieldsToSelect)
-        .eq('chair_id', selection.chairId);
+      const data = await queryQuestionRows({ column: 'chair_id', operator: 'eq', value: selection.chairId });
 
-      if (error) {
-        console.error('[loadQuestionsForGame] Error al consultar Supabase por chair_id:', selection.chairId, error);
-      } else if (data && data.length > 0) {
+      if (data.length > 0) {
         questionsData = data;
         console.log('[loadQuestionsForGame] coincidencias exactas por chair_id:', selection.chairId, data.length);
       } else {
@@ -49,42 +103,9 @@ export async function loadQuestionsForGame(selection: {
     // 2) Si no apareció el chair_id directo, resolve el subject_id a su nombre
     //    y hacemos un filtro de materia estricto, con una rama exclusiva para Infectología.
     if (questionsData.length === 0 && selection.subjectId) {
-      const { data: subjectData, error: subjectError } = await supabase
-        .from('subjects')
-        .select('name')
-        .eq('id', selection.subjectId)
-        .maybeSingle();
-
-      if (subjectError) {
-        console.error('[loadQuestionsForGame] Error al resolver subject_id:', selection.subjectId, subjectError);
-      }
-
-      if (subjectData?.name) {
-        const subjectName = subjectData.name.trim();
-        const isInfectologia = subjectName.toLowerCase().includes('infecto');
-
-        console.log('[loadQuestionsForGame] filtro de subject:', subjectName, 'isInfectologia=', isInfectologia);
-
-        let subjectQuery = supabase
-          .from('questions')
-          .select(fieldsToSelect);
-
-        if (isInfectologia) {
-          subjectQuery = subjectQuery.ilike('subject', '%Infecto%');
-        } else {
-          subjectQuery = subjectQuery.eq('subject', subjectName);
-        }
-
-        const { data: subjectQuestions, error: subjectErrorRows } = await subjectQuery;
-
-        if (subjectErrorRows) {
-          console.error('[loadQuestionsForGame] Error al consultar Supabase por subject:', subjectName, subjectErrorRows);
-        } else if (subjectQuestions && subjectQuestions.length > 0) {
-          questionsData = subjectQuestions;
-          console.log('[loadQuestionsForGame] coincidencias de subject:', subjectName, subjectQuestions.length);
-        } else {
-          console.warn('[loadQuestionsForGame] sin coincidencias de subject=', subjectName);
-        }
+      const subjectIdQuestions = await queryQuestionRows({ column: 'subject_id', operator: 'eq', value: selection.subjectId });
+      if (subjectIdQuestions.length > 0) {
+        questionsData = subjectIdQuestions;
       }
     }
 
@@ -92,16 +113,10 @@ export async function loadQuestionsForGame(selection: {
 
     if (questionsData.length > 0) {
       const shuffled = [...questionsData].sort(() => Math.random() - 0.5);
-      return shuffled.slice(0, QUESTIONS_PER_GAME).map((q) => ({
-        pregunta: q.question,
-        opciones: Array.isArray(q.options)
-          ? q.options
-          : typeof q.options === 'string'
-          ? JSON.parse(q.options)
-          : [],
-        correcta: Number(q.correct_option),
-        explicacion: q.explanation || '',
-      }));
+      return shuffled.flatMap((row) => {
+        const question = serializeQuestion(row);
+        return question ? [question] : [];
+      }).slice(0, QUESTIONS_PER_GAME);
     }
   } catch (err) {
     console.error('Error al cargar preguntas de Supabase:', err);
@@ -119,30 +134,15 @@ export async function loadQuestionsForGame(selection: {
 
 export async function loadRandomQuestionsForGame(count: number = QUESTIONS_PER_GAME): Promise<Question[]> {
   try {
-    const fieldsToSelect = 'id, question, options, correct_option, explanation, chair_id, subject';
-    const { data, error } = await supabase
-      .from('questions')
-      .select(fieldsToSelect);
-
-    if (error) {
-      console.error('[loadRandomQuestionsForGame] Error al consultar Supabase:', error);
+    const data = await queryQuestionRows();
+    if (data.length === 0) {
       return [];
     }
 
-    if (!data || data.length === 0) {
-      return [];
-    }
-
-    const mapped = data.map((q: any) => ({
-      pregunta: q.question,
-      opciones: Array.isArray(q.options)
-        ? q.options
-        : typeof q.options === 'string'
-        ? JSON.parse(q.options)
-        : [],
-      correcta: Number(q.correct_option),
-      explicacion: q.explanation || '',
-    }));
+    const mapped = data.flatMap((row) => {
+      const question = serializeQuestion(row);
+      return question ? [question] : [];
+    });
 
     const shuffled = [...mapped].sort(() => Math.random() - 0.5);
     return shuffled.slice(0, Math.min(count, mapped.length));

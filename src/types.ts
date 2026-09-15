@@ -3,6 +3,8 @@ export interface Question {
   opciones: string[];
   correcta: number;
   explicacion: string;
+  source_type?: 'official' | 'suggestion';
+  author_name?: string | null;
 }
 
 export interface ChallengeData {

@@ -236,6 +236,8 @@ export async function insertQuestion(
       subject: metadata?.subject || null,
       chair: metadata?.chair || null,
       difficulty: 'media',
+      author_name: null,
+      source_type: 'official',
       active: true,
     })
     .select('id')
@@ -299,6 +301,8 @@ export async function insertBatchQuestions(
       correct_option: corr,
       explanation: q.explicacion || '',
       difficulty: 'media',
+      author_name: null,
+      source_type: 'official',
       active: true,
     };
   });

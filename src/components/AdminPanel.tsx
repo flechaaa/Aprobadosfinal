@@ -32,6 +32,7 @@ import { extractQuestionsFromFile } from '@/utils/gemini';
 import { fetchAndExtractText } from '@/utils/fileParser';
 import { deleteSubmission } from '@/utils/submissions';
 import { sendApprovedSubmissionPushNotification } from '@/utils/notifications';
+import { loadPendingQuestionSuggestions, approveQuestionSuggestion, rejectQuestionSuggestion } from '@/utils/questionSuggestions';
 import type { Question, TaxonomySuggestion } from '@/types';
 
 interface AdminPanelProps {
@@ -53,6 +54,23 @@ interface QuestionReport {
   suggested_fix?: Question | null;
 }
 
+interface QuestionSuggestionRecord {
+  id: string;
+  university_id: string;
+  subject_id: string;
+  chair_id: string;
+  question_text: string;
+  options: string[];
+  correct_option: number;
+  explanation?: string | null;
+  difficulty?: 'facil' | 'media' | 'dificil' | null;
+  status: 'pending' | 'approved' | 'rejected';
+  created_at: string;
+  university_name?: string;
+  subject_name?: string;
+  chair_name?: string;
+}
+
 const levelLabels = { university: 'Universidad', subject: 'Materia', chair: 'Cátedra' } as const;
 
 const materialTypeLabels: Record<string, string> = {
@@ -61,7 +79,7 @@ const materialTypeLabels: Record<string, string> = {
   pregunta_respuesta: 'Preguntas con Respuesta',
 };
 
-type Tab = 'taxonomy' | 'materials' | 'reports';
+type Tab = 'taxonomy' | 'materials' | 'reports' | 'questions';
 
 export function AdminPanel({ onBack }: AdminPanelProps) {
   const [passwordInput, setPasswordInput] = useState('');
@@ -91,7 +109,23 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
   const [editingReportId, setEditingReportId] = useState<string | null>(null);
   const [editingDraft, setEditingDraft] = useState<Question | null>(null);
 
+  // Question suggestions state
+  const [questionSuggestions, setQuestionSuggestions] = useState<QuestionSuggestionRecord[]>([]);
+  const [loadingQuestionSuggestions, setLoadingQuestionSuggestions] = useState(false);
+
   const selected = submissions.find((s) => s.id === selectedId) ?? null;
+
+  const fetchQuestionSuggestions = useCallback(async () => {
+    setLoadingQuestionSuggestions(true);
+    try {
+      const rows = await loadPendingQuestionSuggestions();
+      setQuestionSuggestions(rows);
+    } catch {
+      setMessage('No se pudieron cargar las propuestas de preguntas.');
+    } finally {
+      setLoadingQuestionSuggestions(false);
+    }
+  }, []);
 
   const fetchReports = useCallback(async () => {
     setLoadingReports(true);
@@ -123,6 +157,7 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
       setUnlocked(true);
       void refreshSubmissions();
       void fetchReports();
+      void fetchQuestionSuggestions();
     } catch {
       setMessage('Contraseña incorrecta o panel no disponible.');
     }
@@ -135,6 +170,7 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
     setSuggestions([]);
     setSubmissions([]);
     setReports([]);
+    setQuestionSuggestions([]);
     setSelectedId(null);
     setQuestions([]);
     setEditingId(null);
@@ -161,8 +197,9 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
     if (unlocked) {
       if (tab === 'materials') void refreshSubmissions();
       if (tab === 'reports') void fetchReports();
+      if (tab === 'questions') void fetchQuestionSuggestions();
     }
-  }, [unlocked, tab, refreshSubmissions, fetchReports]);
+  }, [unlocked, tab, refreshSubmissions, fetchReports, fetchQuestionSuggestions]);
 
   const selectSubmission = (sub: Submission) => {
     setSelectedId(sub.id);
@@ -218,6 +255,8 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
             correct_option: fix.correcta,
             explanation: fix.explicacion,
             active: true,
+            author_name: null,
+            source_type: 'official',
           },
         ]);
       }
@@ -243,6 +282,34 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
       setMessage('Error al descartar el reporte.');
     }
     setBusy(false);
+  };
+
+  const handleApproveQuestionSuggestion = async (suggestion: QuestionSuggestionRecord) => {
+    setBusy(true);
+    setMessage('');
+    try {
+      await approveQuestionSuggestion(suggestion, adminPassword);
+      setQuestionSuggestions((current) => current.filter((item) => item.id !== suggestion.id));
+      setMessage('Pregunta propuesta aprobada y publicada.');
+    } catch (err: any) {
+      setMessage(err?.message || 'No se pudo aprobar la propuesta.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleRejectQuestionSuggestion = async (suggestionId: string) => {
+    setBusy(true);
+    setMessage('');
+    try {
+      await rejectQuestionSuggestion(suggestionId);
+      setQuestionSuggestions((current) => current.filter((item) => item.id !== suggestionId));
+      setMessage('Propuesta de pregunta rechazada.');
+    } catch (err: any) {
+      setMessage(err?.message || 'No se pudo rechazar la propuesta.');
+    } finally {
+      setBusy(false);
+    }
   };
 
   const handleDeleteReportedQuestion = async (report: QuestionReport) => {
@@ -318,6 +385,8 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
             correct_option: editingDraft.correcta,
             explanation: editingDraft.explicacion,
             active: true,
+            author_name: null,
+            source_type: 'official',
           },
         ]);
       }
@@ -603,6 +672,22 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
           Materiales Colaborativos
         </button>
         <button
+          onClick={() => setTab('questions')}
+          className={`px-4 py-3 text-sm font-bold transition border-b-2 flex items-center gap-2 ${
+            tab === 'questions'
+              ? 'border-emerald-500 text-emerald-700'
+              : 'border-transparent text-gray-400 hover:text-gray-600'
+          }`}
+        >
+          <Sparkles className="h-4 w-4" />
+          Preguntas
+          {questionSuggestions.length > 0 && (
+            <span className="rounded-full bg-emerald-100 text-emerald-700 px-2 py-0.5 text-xs font-bold">
+              {questionSuggestions.length}
+            </span>
+          )}
+        </button>
+        <button
           onClick={() => setTab('reports')}
           className={`px-4 py-3 text-sm font-bold transition border-b-2 flex items-center gap-2 ${
             tab === 'reports'
@@ -687,6 +772,157 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
                 </div>
               ))}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Question suggestions tab */}
+      {tab === 'questions' && (
+        <div className="flex-1 px-4 py-8 overflow-y-auto">
+          <div className="mx-auto max-w-4xl">
+            <div className="mb-6 flex items-center justify-between">
+              <div>
+                <p className="text-sm font-bold uppercase tracking-widest text-emerald-600">Propuestas</p>
+                <h1 className="mt-1 text-2xl font-extrabold text-gray-900">Preguntas propuestas</h1>
+              </div>
+              <button
+                onClick={() => void fetchQuestionSuggestions()}
+                disabled={loadingQuestionSuggestions}
+                className="rounded-xl border border-emerald-200 px-4 py-2 text-xs font-bold text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+              >
+                {loadingQuestionSuggestions ? 'Cargando...' : 'Recargar'}
+              </button>
+            </div>
+
+            {questionSuggestions.length === 0 ? (
+              <div className="rounded-3xl bg-white p-8 text-center shadow-lg">
+                <Sparkles className="mx-auto mb-3 h-8 w-8 text-emerald-600" />
+                <p className="font-bold text-gray-800">Sin propuestas pendientes</p>
+                <p className="mt-1 text-sm text-gray-500">No hay preguntas esperando revisión.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {questionSuggestions.map((suggestion) => (
+                  <div key={suggestion.id} className="rounded-2xl bg-white p-5 shadow-lg">
+                    <div className="flex justify-between items-start gap-4">
+                      <div className="space-y-2 w-full">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-black text-emerald-700">{suggestion.university_name}</span>
+                          <span className="rounded-full bg-cyan-50 px-2 py-1 text-[11px] font-black text-cyan-700">{suggestion.subject_name}</span>
+                          <span className="rounded-full bg-amber-50 px-2 py-1 text-[11px] font-black text-amber-700">{suggestion.chair_name}</span>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <span className="rounded-full bg-amber-50 px-2 py-1 text-[10px] font-black text-amber-700 border border-amber-200">Se creará la taxonomía si falta</span>
+                        </div>
+
+                        <div className="rounded-2xl border border-emerald-100 bg-emerald-50/40 p-3">
+                          <label className="block text-[11px] font-black uppercase text-gray-500 mb-1">Pregunta</label>
+                          <textarea
+                            value={suggestion.question_text}
+                            onChange={(event) => {
+                              const next = [...questionSuggestions];
+                              const idx = next.findIndex((item) => item.id === suggestion.id);
+                              if (idx >= 0) next[idx] = { ...next[idx], question_text: event.target.value };
+                              setQuestionSuggestions(next);
+                            }}
+                            rows={3}
+                            className="w-full rounded-xl border-2 border-emerald-200 px-3 py-2 text-xs text-gray-800 outline-none focus:border-emerald-500"
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {suggestion.options.map((opt, idx) => (
+                            <div key={idx} className={`rounded-xl border px-3 py-2 ${idx === suggestion.correct_option ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200 bg-gray-50'}`}>
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="radio"
+                                  name={`correct-option-${suggestion.id}`}
+                                  checked={idx === suggestion.correct_option}
+                                  onChange={() => {
+                                    const next = [...questionSuggestions];
+                                    const rowIndex = next.findIndex((item) => item.id === suggestion.id);
+                                    if (rowIndex >= 0) next[rowIndex] = { ...next[rowIndex], correct_option: idx };
+                                    setQuestionSuggestions(next);
+                                  }}
+                                  className="h-4 w-4 accent-emerald-600"
+                                />
+                                <span className="text-[11px] font-black text-gray-500">{String.fromCharCode(65 + idx)}</span>
+                                <input
+                                  value={opt}
+                                  onChange={(event) => {
+                                    const next = [...questionSuggestions];
+                                    const rowIndex = next.findIndex((item) => item.id === suggestion.id);
+                                    if (rowIndex >= 0) {
+                                      const changed = [...next[rowIndex].options];
+                                      changed[idx] = event.target.value;
+                                      next[rowIndex] = { ...next[rowIndex], options: changed };
+                                    }
+                                    setQuestionSuggestions(next);
+                                  }}
+                                  className="w-full rounded-lg border border-gray-200 px-2 py-1 text-xs font-bold text-gray-800 outline-none focus:border-emerald-500"
+                                />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+                          <div>
+                            <label className="block text-[11px] font-black uppercase text-gray-500 mb-1">Explicación</label>
+                            <textarea
+                              value={suggestion.explanation ?? ''}
+                              onChange={(event) => {
+                                const next = [...questionSuggestions];
+                                const idx = next.findIndex((item) => item.id === suggestion.id);
+                                if (idx >= 0) next[idx] = { ...next[idx], explanation: event.target.value };
+                                setQuestionSuggestions(next);
+                              }}
+                              rows={2}
+                              className="w-full rounded-xl border-2 border-gray-200 px-3 py-2 text-xs text-gray-800 outline-none focus:border-emerald-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-black uppercase text-gray-500 mb-1">Dificultad</label>
+                            <select
+                              value={suggestion.difficulty ?? 'media'}
+                              onChange={(event) => {
+                                const next = [...questionSuggestions];
+                                const idx = next.findIndex((item) => item.id === suggestion.id);
+                                if (idx >= 0) next[idx] = { ...next[idx], difficulty: event.target.value as 'facil' | 'media' | 'dificil' };
+                                setQuestionSuggestions(next);
+                              }}
+                              className="w-full rounded-xl border-2 border-gray-200 px-3 py-2 text-xs text-gray-800 outline-none focus:border-emerald-500"
+                            >
+                              <option value="facil">Fácil</option>
+                              <option value="media">Media</option>
+                              <option value="dificil">Difícil</option>
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => void handleApproveQuestionSuggestion(suggestion)}
+                          disabled={busy}
+                          className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-black text-white hover:bg-emerald-700 disabled:opacity-50"
+                        >
+                          <Check className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleRejectQuestionSuggestion(suggestion.id)}
+                          disabled={busy}
+                          className="rounded-xl bg-red-50 px-3 py-2 text-xs font-black text-red-700 hover:bg-red-100 disabled:opacity-50"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}

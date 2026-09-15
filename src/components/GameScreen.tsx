@@ -1,6 +1,6 @@
 import { ReportModal } from './ReportModal';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Check, X, Clock, ChevronRight, Flag } from 'lucide-react';
+import { Check, X, Clock, ChevronRight, Flag, UserRound } from 'lucide-react';
 import { getAllQuestions, calculatePoints, TIME_PER_QUESTION } from '@/utils/game';
 import type { AnswerRecord, Question } from '@/types';
 
@@ -172,6 +172,15 @@ export function GameScreen({ questions: customQuestions, questionIndices, onFini
                   <span>Reportar</span>
                 </button>
               </div>
+
+              {question.source_type === 'suggestion' && question.author_name && (
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-black text-emerald-700 border border-emerald-200">
+                    <UserRound className="h-3.5 w-3.5" />
+                    <span>Enviado por: {question.author_name}</span>
+                  </div>
+                </div>
+              )}
 
               {/* Question */}
               <h2
