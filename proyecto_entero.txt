@@ -1,0 +1,4823 @@
+﻿--- N:\Medicina\6to\Aprobados\project-bolt-sb1-tducdbwf\project\src\components\AdBanner.tsx ---
+const SHOW_BANNER = false;
+
+const STORE_URL = 'https://rockndoc.mitiendanube.com/productos/estuche-funda-para-estetoscopio-littmann-rigido-premium/'; // tu link de siempre
+
+export function AdBanner() {
+  if (!SHOW_BANNER) {
+    return null;
+  }
+
+  return (
+    <a
+      href={STORE_URL}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="relative block overflow-hidden rounded-3xl bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800 shadow-2xl transition-transform hover:-translate-y-0.5"
+    >
+      {/* Decorative accent */}
+      <div className="absolute top-0 right-0 w-40 h-40 bg-teal-500/10 rounded-full blur-3xl" />
+      <div className="absolute bottom-0 left-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl" />
+
+      <div className="relative p-6 sm:p-8 flex items-center justify-between gap-4">
+        <div>
+          <span className="inline-block px-3 py-1 text-xs font-semibold uppercase tracking-wider text-teal-400 bg-teal-950/60 border border-teal-800/50 rounded-full mb-3">
+            Equipamiento MÃ©dico
+          </span>
+          <h3 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
+            Estuches de Estetoscopio RÃ­gidos
+          </h3>
+          <p className="mt-1 text-sm text-slate-400 max-w-md">
+            ProtecciÃ³n de alto impacto para tu instrumental.
+          </p>
+        </div>
+        <div className="hidden sm:flex items-center gap-2 text-sm font-semibold text-teal-400">
+          Ver tienda &rarr;
+        </div>
+      </div>
+    </a>
+  );
+}
+--- N:\Medicina\6to\Aprobados\project-bolt-sb1-tducdbwf\project\src\components\AdminPanel.tsx ---
+import { useCallback, useEffect, useState } from 'react';
+import {
+  ArrowLeft,
+  Check,
+  CheckCircle2,
+  ExternalLink,
+  FileText,
+  Loader2,
+  LogIn,
+  LogOut,
+  Pencil,
+  ShieldCheck,
+  Sparkles,
+  X,
+  AlertCircle,
+  Trash2,
+  CheckCheck,
+  Flag,
+  Save,
+} from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+import { loadSuggestions, moderateSuggestion } from '@/utils/taxonomy';
+import {
+  loadPendingSubmissions,
+  insertQuestion,
+  insertBatchQuestions,
+  markSubmissionProcessed,
+  ensureTaxonomyFromSubmission,
+  type Submission,
+} from '@/utils/moderation';
+import { extractQuestionsFromFile } from '@/utils/gemini';
+import { fetchAndExtractText } from '@/utils/fileParser';
+import { deleteSubmission } from '@/utils/submissions';
+import { sendApprovedSubmissionPushNotification } from '@/utils/notifications';
+import type { Question, TaxonomySuggestion } from '@/types';
+
+interface AdminPanelProps {
+  onBack: () => void;
+}
+
+interface EditableQuestion extends Question {
+  approved: boolean;
+}
+
+interface QuestionReport {
+  id: string;
+  question_id: string;
+  question_text: string | null;
+  reason: string;
+  details: string | null;
+  created_at: string;
+  raw_data?: Question;
+  suggested_fix?: Question | null;
+}
+
+const levelLabels = { university: 'Universidad', subject: 'Materia', chair: 'CÃ¡tedra' } as const;
+
+const materialTypeLabels: Record<string, string> = {
+  apunte: 'Apunte / Resumen teÃ³rico',
+  preguntero_choice: 'Preguntero / Choice',
+  pregunta_respuesta: 'Preguntas con Respuesta',
+};
+
+type Tab = 'taxonomy' | 'materials' | 'reports';
+
+export function AdminPanel({ onBack }: AdminPanelProps) {
+  const [passwordInput, setPasswordInput] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
+  const [unlocked, setUnlocked] = useState(false);
+  const [tab, setTab] = useState<Tab>('taxonomy');
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  // Taxonomy state
+  const [suggestions, setSuggestions] = useState<TaxonomySuggestion[]>([]);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState('');
+
+  // Materials state
+  const [submissions, setSubmissions] = useState<Submission[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [questions, setQuestions] = useState<EditableQuestion[]>([]);
+  const [extracting, setExtracting] = useState(false);
+  const [extractError, setExtractError] = useState('');
+  const [progressMsg, setProgressMsg] = useState('');
+  const [approvingAll, setApprovingAll] = useState(false);
+
+  // Reports state
+  const [reports, setReports] = useState<QuestionReport[]>([]);
+  const [loadingReports, setLoadingReports] = useState(false);
+  const [editingReportId, setEditingReportId] = useState<string | null>(null);
+  const [editingDraft, setEditingDraft] = useState<Question | null>(null);
+
+  const selected = submissions.find((s) => s.id === selectedId) ?? null;
+
+  const fetchReports = useCallback(async () => {
+    setLoadingReports(true);
+    try {
+      const { data, error } = await supabase
+        .from('question_reports')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (!error && data) {
+        setReports(data);
+      }
+    } catch {
+      setMessage('No se pudieron cargar los reportes.');
+    } finally {
+      setLoadingReports(false);
+    }
+  }, []);
+
+  const unlock = async () => {
+    if (!passwordInput) return;
+    setBusy(true);
+    setMessage('');
+    try {
+      const pending = await loadSuggestions(passwordInput);
+      setAdminPassword(passwordInput);
+      setPasswordInput('');
+      setSuggestions(pending);
+      setUnlocked(true);
+      void refreshSubmissions();
+      void fetchReports();
+    } catch {
+      setMessage('ContraseÃ±a incorrecta o panel no disponible.');
+    }
+    setBusy(false);
+  };
+
+  const lock = () => {
+    setAdminPassword('');
+    setUnlocked(false);
+    setSuggestions([]);
+    setSubmissions([]);
+    setReports([]);
+    setSelectedId(null);
+    setQuestions([]);
+    setEditingId(null);
+    setEditingReportId(null);
+  };
+
+  const refreshSubmissions = useCallback(async () => {
+    try {
+      const pending = await loadPendingSubmissions();
+      setSubmissions(pending);
+      if (pending.length > 0 && !selectedId) {
+        selectSubmission(pending[0]);
+      }
+      if (pending.length === 0) {
+        setSelectedId(null);
+        setQuestions([]);
+      }
+    } catch {
+      setMessage('No se pudieron cargar los envÃ­os.');
+    }
+  }, [selectedId]);
+
+  useEffect(() => {
+    if (unlocked) {
+      if (tab === 'materials') void refreshSubmissions();
+      if (tab === 'reports') void fetchReports();
+    }
+  }, [unlocked, tab, refreshSubmissions, fetchReports]);
+
+  const selectSubmission = (sub: Submission) => {
+    setSelectedId(sub.id);
+    setExtractError('');
+    if (sub.extracted_questions && sub.extracted_questions.length > 0) {
+      setQuestions(sub.extracted_questions.map((q) => ({ ...q, approved: false })));
+    } else {
+      setQuestions([]);
+    }
+  };
+
+  const review = async (suggestion: TaxonomySuggestion, action: 'approve' | 'reject') => {
+    setBusy(true);
+    setMessage('');
+    try {
+      await moderateSuggestion(
+        suggestion.id,
+        action,
+        adminPassword,
+        action === 'approve' ? (editingName || suggestion.proposed_name) : undefined,
+      );
+      setSuggestions((current) => current.filter((item) => item.id !== suggestion.id));
+      setEditingId(null);
+    } catch {
+      setMessage('No pudimos actualizar la propuesta.');
+    }
+    setBusy(false);
+  };
+
+  const handleApproveSuggestedFix = async (report: QuestionReport) => {
+    if (!report.suggested_fix) return;
+    setBusy(true);
+    setMessage('');
+
+    try {
+      const fix = report.suggested_fix;
+
+      const { error } = await supabase
+        .from('questions')
+        .update({
+          question: fix.pregunta,
+          options: fix.opciones,
+          correct_option: fix.correcta,
+          explanation: fix.explicacion,
+        })
+        .eq('id', report.question_id);
+
+      if (error) {
+        await supabase.from('questions').insert([
+          {
+            question: fix.pregunta,
+            options: fix.opciones,
+            correct_option: fix.correcta,
+            explanation: fix.explicacion,
+            active: true,
+          },
+        ]);
+      }
+
+      await supabase.from('question_reports').delete().eq('id', report.id);
+      setReports((prev) => prev.filter((r) => r.id !== report.id));
+      setMessage('Â¡CorrecciÃ³n del usuario aprobada y aplicada con Ã©xito!');
+    } catch (err: any) {
+      setMessage(err.message || 'Error al aplicar la correcciÃ³n.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleDismissReport = async (reportId: string) => {
+    setBusy(true);
+    const { error } = await supabase.from('question_reports').delete().eq('id', reportId);
+    if (!error) {
+      setReports((prev) => prev.filter((r) => r.id !== reportId));
+      if (editingReportId === reportId) setEditingReportId(null);
+      setMessage('Reporte resuelto.');
+    } else {
+      setMessage('Error al descartar el reporte.');
+    }
+    setBusy(false);
+  };
+
+  const handleDeleteReportedQuestion = async (report: QuestionReport) => {
+    const confirm = window.confirm('Â¿Seguro que querÃ©s dar de baja esta pregunta y eliminar el reporte?');
+    if (!confirm) return;
+
+    setBusy(true);
+    try {
+      await supabase.from('questions').delete().eq('id', report.question_id);
+      await supabase.from('question_reports').delete().eq('id', report.id);
+      setReports((prev) => prev.filter((r) => r.id !== report.id));
+      if (editingReportId === report.id) setEditingReportId(null);
+      setMessage('Pregunta eliminada.');
+    } catch {
+      setMessage('No se pudo eliminar la pregunta.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleStartEditReport = (report: QuestionReport) => {
+    if (editingReportId === report.id) {
+      setEditingReportId(null);
+      setEditingDraft(null);
+      return;
+    }
+    setEditingReportId(report.id);
+
+    const baseOpciones =
+      report.raw_data?.opciones ||
+      report.suggested_fix?.opciones ||
+      ['', '', '', ''];
+
+    setEditingDraft({
+      pregunta:
+        report.raw_data?.pregunta ||
+        report.suggested_fix?.pregunta ||
+        report.question_text ||
+        '',
+      opciones:
+        Array.isArray(baseOpciones) && baseOpciones.length > 0
+          ? baseOpciones
+          : ['', '', '', ''],
+      correcta: report.raw_data?.correcta ?? report.suggested_fix?.correcta ?? 0,
+      explicacion:
+        report.raw_data?.explicacion ||
+        report.suggested_fix?.explicacion ||
+        '',
+    });
+  };
+
+  const handleSaveReportFix = async (report: QuestionReport) => {
+    if (!editingDraft) return;
+    setBusy(true);
+    setMessage('');
+
+    try {
+      const { error: updateError } = await supabase
+        .from('questions')
+        .update({
+          question: editingDraft.pregunta,
+          options: editingDraft.opciones,
+          correct_option: editingDraft.correcta,
+          explanation: editingDraft.explicacion,
+        })
+        .eq('id', report.question_id);
+
+      if (updateError) {
+        await supabase.from('questions').insert([
+          {
+            question: editingDraft.pregunta,
+            options: editingDraft.opciones,
+            correct_option: editingDraft.correcta,
+            explanation: editingDraft.explicacion,
+            active: true,
+          },
+        ]);
+      }
+
+      await supabase.from('question_reports').delete().eq('id', report.id);
+      setReports((prev) => prev.filter((r) => r.id !== report.id));
+      setEditingReportId(null);
+      setEditingDraft(null);
+      setMessage('Â¡Pregunta corregida y guardada exitosamente!');
+    } catch (err: any) {
+      setMessage(err.message || 'Error al guardar la correcciÃ³n.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleExtract = async () => {
+    if (!selected) return;
+    setExtracting(true);
+    setExtractError('');
+    setProgressMsg('Leyendo archivo y extrayendo texto...');
+    setQuestions([]);
+    try {
+      const rawText = await fetchAndExtractText(selected.file_url, selected.file_type);
+
+      if (!rawText || rawText.trim().length < 20) {
+        throw new Error('El archivo no contiene texto legible (puede ser un escaneo o imÃ¡genes sin OCR).');
+      }
+
+      setProgressMsg('Analizando preguntas con IA...');
+
+      const result = await extractQuestionsFromFile(rawText, (current, total) => {
+        setProgressMsg(`Procesando bloque ${current} de ${total}...`);
+      });
+
+      if (result.error) {
+        setExtractError(result.error);
+      } else {
+        const mapped = result.questions.map((q) => ({ ...q, approved: false }));
+        setQuestions(mapped);
+
+        await supabase
+          .from('submissions')
+          .update({ extracted_questions: result.questions })
+          .eq('id', selected.id);
+
+        setSubmissions((prev) =>
+          prev.map((s) => (s.id === selected.id ? { ...s, extracted_questions: result.questions } : s))
+        );
+      }
+    } catch (err: any) {
+      setExtractError(err.message || 'No se pudo procesar el material.');
+    } finally {
+      setExtracting(false);
+      setProgressMsg('');
+    }
+  };
+
+  const handleRejectSubmission = async () => {
+    if (!selected) return;
+    const confirmDelete = window.confirm(
+      `Â¿QuerÃ©s descartar y eliminar definitivamente este envÃ­o de "${selected.subject}"? Se borrarÃ¡ tanto de la base de datos como del almacenamiento.`
+    );
+    if (!confirmDelete) return;
+
+    setBusy(true);
+    setMessage('');
+    try {
+      await deleteSubmission(selected.id, selected.file_url);
+      const remaining = submissions.filter((s) => s.id !== selected.id);
+      setSubmissions(remaining);
+      if (remaining.length > 0) {
+        selectSubmission(remaining[0]);
+      } else {
+        setSelectedId(null);
+        setQuestions([]);
+      }
+      setMessage('Material descartado y eliminado con Ã©xito.');
+    } catch (err: any) {
+      setMessage(err.message || 'No se pudo eliminar el material.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const updateQuestion = (index: number, field: keyof Question, value: string | number) => {
+    setQuestions((current) =>
+      current.map((q, i) => (i === index ? { ...q, [field]: value } : q)),
+    );
+  };
+
+  const updateOption = (qIndex: number, optIndex: number, value: string) => {
+    setQuestions((current) =>
+      current.map((q, i) => {
+        if (i !== qIndex) return q;
+        const opciones = [...q.opciones];
+        opciones[optIndex] = value;
+        return { ...q, opciones };
+      }),
+    );
+  };
+
+  const handleApprove = async (index: number) => {
+    if (!selected || !adminPassword) return;
+    const q = questions[index];
+    setBusy(true);
+    setMessage('');
+    try {
+      const taxonomy = await ensureTaxonomyFromSubmission(selected, adminPassword);
+      await insertQuestion(
+        q.pregunta,
+        q.opciones,
+        q.correcta,
+        q.explicacion,
+        selected.id,
+        adminPassword,
+        taxonomy.chairId,
+        {
+          university: selected.university,
+          subject: selected.subject,
+          chair: selected.chair,
+        }
+      );
+      setQuestions((current) =>
+        current.map((item, i) => (i === index ? { ...item, approved: true } : item)),
+      );
+      setMessage('Pregunta incorporada al juego y taxonomÃ­a sincronizada.');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'No se pudo guardar la pregunta.';
+      setMessage(msg);
+    }
+    setBusy(false);
+  };
+
+  const handleApproveAll = async () => {
+    if (!selected || !adminPassword || questions.length === 0) return;
+    setApprovingAll(true);
+    setMessage('');
+
+    try {
+      const taxonomy = await ensureTaxonomyFromSubmission(selected, adminPassword);
+      const pendingQuestions = questions.filter((q) => !q.approved);
+
+      // InserciÃ³n atÃ³mica en bloque de todas las preguntas juntas
+      await insertBatchQuestions(
+        pendingQuestions,
+        selected.id,
+        taxonomy.chairId,
+        {
+          university: selected.university,
+          subject: selected.subject,
+          chair: selected.chair,
+        }
+      );
+
+      await sendApprovedSubmissionPushNotification({
+        subject: selected.subject,
+        chair: selected.chair,
+        sessionId: null,
+      });
+
+      await markSubmissionProcessed(selected.id, adminPassword);
+
+      const remaining = submissions.filter((s) => s.id !== selected.id);
+      setSubmissions(remaining);
+      if (remaining.length > 0) {
+        selectSubmission(remaining[0]);
+      } else {
+        setSelectedId(null);
+        setQuestions([]);
+      }
+      setMessage(`Â¡Lote aprobado con Ã©xito! Se sumaron ${pendingQuestions.length} preguntas listas para jugar.`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Error al aprobar el lote.';
+      setMessage(msg);
+    } finally {
+      setApprovingAll(false);
+    }
+  };
+
+  const handleComplete = async () => {
+    if (!selected || !adminPassword) return;
+    setBusy(true);
+    setMessage('');
+    try {
+      await markSubmissionProcessed(selected.id, adminPassword);
+      const remaining = submissions.filter((s) => s.id !== selected.id);
+      setSubmissions(remaining);
+      if (remaining.length > 0) {
+        selectSubmission(remaining[0]);
+      } else {
+        setSelectedId(null);
+        setQuestions([]);
+      }
+      setMessage('EnvÃ­o marcado como completado.');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'No se pudo actualizar el envÃ­o.';
+      setMessage(msg);
+    }
+    setBusy(false);
+  };
+
+  if (!unlocked) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-slate-50 to-teal-50 px-4 py-8">
+        <div className="mx-auto max-w-md">
+          <button onClick={onBack} className="mb-6 flex items-center gap-2 text-sm font-semibold text-gray-500 hover:text-teal-700">
+            <ArrowLeft className="h-4 w-4" /> Volver
+          </button>
+          <div className="rounded-3xl bg-white p-6 shadow-xl">
+            <div className="mb-5 flex items-center gap-3">
+              <div className="rounded-2xl bg-teal-100 p-3">
+                <ShieldCheck className="h-6 w-6 text-teal-700" />
+              </div>
+              <div>
+                <h1 className="text-xl font-extrabold text-gray-900">Panel de administraciÃ³n</h1>
+                <p className="text-sm text-gray-500">ModeraciÃ³n de propuestas, materiales y reportes</p>
+              </div>
+            </div>
+            <p className="mb-5 text-sm leading-relaxed text-gray-600">IngresÃ¡ la contraseÃ±a de administrador para acceder.</p>
+            <input
+              type="password"
+              value={passwordInput}
+              onChange={(event) => setPasswordInput(event.target.value)}
+              onKeyDown={(event) => event.key === 'Enter' && void unlock()}
+              placeholder="ContraseÃ±a de administrador"
+              autoComplete="current-password"
+              className="mb-3 w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-sm outline-none focus:border-teal-500"
+            />
+            <button
+              onClick={() => void unlock()}
+              disabled={busy || !passwordInput}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-teal-600 py-3.5 font-bold text-white transition hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <LogIn className="h-4 w-4" /> Ingresar al panel
+            </button>
+            {message && <p className="mt-4 rounded-xl bg-red-50 p-3 text-xs font-semibold text-red-700">{message}</p>}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50 flex flex-col">
+      {/* Top bar */}
+      <div className="sticky top-0 z-20 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between shadow-sm">
+        <div className="flex items-center gap-3">
+          <button onClick={onBack} className="flex items-center gap-2 text-sm font-semibold text-gray-500 hover:text-teal-700">
+            <ArrowLeft className="h-4 w-4" /> Volver
+          </button>
+          <div className="h-5 w-px bg-gray-200" />
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="h-5 w-5 text-teal-600" />
+            <span className="text-sm font-bold text-gray-800">Panel de administraciÃ³n</span>
+          </div>
+        </div>
+        <button onClick={lock} className="flex items-center gap-2 text-sm font-semibold text-gray-500 hover:text-red-600">
+          <LogOut className="h-4 w-4" /> Bloquear
+        </button>
+      </div>
+
+      {/* Tabs */}
+      <div className="bg-white border-b border-gray-200 px-4 flex gap-1">
+        <button
+          onClick={() => setTab('taxonomy')}
+          className={`px-4 py-3 text-sm font-bold transition border-b-2 ${
+            tab === 'taxonomy'
+              ? 'border-teal-500 text-teal-700'
+              : 'border-transparent text-gray-400 hover:text-gray-600'
+          }`}
+        >
+          Propuestas
+        </button>
+        <button
+          onClick={() => setTab('materials')}
+          className={`px-4 py-3 text-sm font-bold transition border-b-2 ${
+            tab === 'materials'
+              ? 'border-teal-500 text-teal-700'
+              : 'border-transparent text-gray-400 hover:text-gray-600'
+          }`}
+        >
+          Materiales Colaborativos
+        </button>
+        <button
+          onClick={() => setTab('reports')}
+          className={`px-4 py-3 text-sm font-bold transition border-b-2 flex items-center gap-2 ${
+            tab === 'reports'
+              ? 'border-red-500 text-red-700'
+              : 'border-transparent text-gray-400 hover:text-gray-600'
+          }`}
+        >
+          <Flag className="h-4 w-4" />
+          Reportes
+          {reports.length > 0 && (
+            <span className="rounded-full bg-red-100 text-red-700 px-2 py-0.5 text-xs font-bold">
+              {reports.length}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {message && (
+        <div className="bg-teal-50 border-b border-teal-200 px-4 py-2 text-xs font-semibold text-teal-700 flex items-center gap-2">
+          <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
+          {message}
+          <button onClick={() => setMessage('')} className="ml-auto text-teal-400 hover:text-teal-600">
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+
+      {/* Taxonomy tab */}
+      {tab === 'taxonomy' && (
+        <div className="flex-1 px-4 py-8 overflow-y-auto">
+          <div className="mx-auto max-w-2xl">
+            <div className="mb-6">
+              <p className="text-sm font-bold uppercase tracking-widest text-teal-600">Aprobados</p>
+              <h1 className="mt-1 text-2xl font-extrabold text-gray-900">Propuestas pendientes</h1>
+              <p className="mt-2 text-gray-500">CorregÃ­ nombres antes de publicarlos en los selectores.</p>
+            </div>
+            <div className="space-y-3">
+              {suggestions.length === 0 && (
+                <div className="rounded-3xl bg-white p-8 text-center shadow-lg">
+                  <Check className="mx-auto mb-3 h-8 w-8 text-teal-600" />
+                  <p className="font-bold text-gray-800">Todo al dÃ­a</p>
+                  <p className="mt-1 text-sm text-gray-500">No hay propuestas pendientes.</p>
+                </div>
+              )}
+              {suggestions.map((suggestion) => (
+                <div key={suggestion.id} className="rounded-2xl bg-white p-4 shadow-lg">
+                  <div className="mb-3 flex items-start justify-between gap-3">
+                    <div>
+                      <span className="text-xs font-bold uppercase tracking-wide text-teal-600">{levelLabels[suggestion.level]}</span>
+                      <p className="mt-1 font-bold text-gray-900">{suggestion.proposed_name}</p>
+                    </div>
+                    <button
+                      onClick={() => { setEditingId(suggestion.id); setEditingName(suggestion.proposed_name); }}
+                      className="rounded-lg p-2 text-gray-400 hover:bg-teal-50 hover:text-teal-700"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </button>
+                  </div>
+                  {editingId === suggestion.id && (
+                    <input
+                      value={editingName}
+                      onChange={(event) => setEditingName(event.target.value)}
+                      className="mb-3 w-full rounded-xl border-2 border-teal-200 px-3 py-2 text-sm outline-none focus:border-teal-500"
+                    />
+                  )}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => void review(suggestion, 'approve')}
+                      disabled={busy}
+                      className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-teal-600 py-2.5 text-sm font-bold text-white hover:bg-teal-700 disabled:opacity-50"
+                    >
+                      <Check className="h-4 w-4" /> Aprobar
+                    </button>
+                    <button
+                      onClick={() => void review(suggestion, 'reject')}
+                      disabled={busy}
+                      className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-red-50 py-2.5 text-sm font-bold text-red-700 hover:bg-red-100 disabled:opacity-50"
+                    >
+                      <X className="h-4 w-4" /> Rechazar
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Materials tab */}
+      {tab === 'materials' && (
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {submissions.length > 0 && (
+            <div className="bg-white border-b border-gray-200 px-4 py-2.5 flex items-center gap-2 overflow-x-auto scrollbar-hide">
+              <span className="text-xs font-bold uppercase tracking-wide text-gray-400 flex-shrink-0">Pendientes:</span>
+              {submissions.map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => selectSubmission(s)}
+                  className={`flex-shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                    s.id === selectedId ? 'bg-teal-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  {s.subject} â€” {s.chair}
+                  {s.extracted_questions && s.extracted_questions.length > 0 && (
+                    <span className="ml-1.5 rounded-full bg-white/20 px-1.5 py-0.2 text-[10px]">
+                      {s.extracted_questions.length}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {submissions.length === 0 ? (
+            <div className="flex-1 flex items-center justify-center p-8">
+              <div className="text-center">
+                <CheckCircle2 className="mx-auto mb-4 h-12 w-12 text-teal-500" />
+                <p className="text-lg font-bold text-gray-800">Todo al dÃ­a</p>
+                <p className="mt-1 text-sm text-gray-500">No hay envÃ­os pendientes para moderar.</p>
+              </div>
+            </div>
+          ) : selected ? (
+            <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
+              <div className="w-full lg:w-1/2 flex flex-col border-r border-gray-200 bg-gray-100">
+                <div className="bg-white px-4 py-3 border-b border-gray-200">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-teal-600" />
+                      <span className="text-sm font-bold text-gray-800">{selected.subject}</span>
+                      <span className="text-xs text-gray-400">Â·</span>
+                      <span className="text-xs text-gray-500">{materialTypeLabels[selected.material_type] ?? selected.material_type}</span>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <a
+                        href={selected.file_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1 text-xs font-bold text-teal-600 hover:text-teal-700"
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" /> Abrir en pestaÃ±a
+                      </a>
+                      <button
+                        onClick={() => void handleRejectSubmission()}
+                        disabled={busy}
+                        className="flex items-center gap-1 text-xs font-bold text-red-600 hover:text-red-800 disabled:opacity-50"
+                        title="Descartar y borrar de Storage"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" /> Descartar
+                      </button>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                    <div><span className="font-semibold text-gray-400">Universidad:</span> <span className="text-gray-700">{selected.university}</span></div>
+                    <div><span className="font-semibold text-gray-400">CÃ¡tedra:</span> <span className="text-gray-700">{selected.chair}</span></div>
+                    {selected.source_notes && <div className="col-span-2"><span className="font-semibold text-gray-400">Notas:</span> <span className="text-gray-700">{selected.source_notes}</span></div>}
+                  </div>
+                </div>
+                <div className="flex-1 overflow-hidden p-2">
+                  {selected.file_type.startsWith('image/') ? (
+                    <img src={selected.file_url} alt="Material" className="w-full h-full object-contain rounded-lg" />
+                  ) : (
+                    <iframe
+                      src={selected.file_url}
+                      title="Visor de documento"
+                      className="w-full h-full rounded-lg border border-gray-200 bg-white"
+                    />
+                  )}
+                </div>
+              </div>
+
+              <div className="w-full lg:w-1/2 flex flex-col overflow-y-auto">
+                <div className="p-4">
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => void handleExtract()}
+                      disabled={extracting}
+                      className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 py-3.5 font-bold text-white transition-all hover:from-teal-700 hover:to-emerald-700 active:scale-[0.98] shadow-lg disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {extracting ? (
+                        <><Loader2 className="h-5 w-5 animate-spin" /> {progressMsg || 'Extrayendo preguntas...'}</>
+                      ) : (
+                        <><Sparkles className="h-5 w-5" /> {questions.length > 0 ? 'Volver a extraer con IA' : 'Extraer Preguntas con IA'}</>
+                      )}
+                    </button>
+                  </div>
+
+                  {extractError && (
+                    <div className="mt-3 flex items-start gap-2 rounded-xl bg-red-50 p-3">
+                      <AlertCircle className="h-4 w-4 text-red-500 flex-shrink-0 mt-0.5" />
+                      <p className="text-xs font-semibold text-red-700">{extractError}</p>
+                    </div>
+                  )}
+
+                  {questions.length > 0 && (
+                    <div className="mt-4 flex items-center justify-between rounded-2xl border border-teal-200 bg-teal-50 p-4 shadow-sm">
+                      <div>
+                        <p className="text-sm font-extrabold text-teal-950">
+                          {questions.length} preguntas disponibles
+                        </p>
+                        <p className="text-xs text-teal-700">
+                          PodÃ©s editar opciones o aprobar el lote completo al juego.
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => void handleApproveAll()}
+                        disabled={approvingAll || busy}
+                        className="flex items-center gap-1.5 rounded-xl bg-teal-600 px-4 py-2.5 text-xs font-bold text-white shadow-md transition hover:bg-teal-700 active:scale-95 disabled:opacity-50"
+                      >
+                        {approvingAll ? (
+                          <><Loader2 className="h-4 w-4 animate-spin" /> Guardando...</>
+                        ) : (
+                          <><CheckCheck className="h-4 w-4" /> Aprobar todas</>
+                        )}
+                      </button>
+                    </div>
+                  )}
+
+                  {questions.length > 0 && (
+                    <div className="mt-4 space-y-3">
+                      {questions.map((q, qIndex) => (
+                        <div key={qIndex} className={`rounded-2xl border-2 p-4 transition ${q.approved ? 'border-teal-300 bg-teal-50/50' : 'border-gray-200 bg-white'}`}>
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs font-bold uppercase tracking-wide text-teal-600">Pregunta {qIndex + 1}</span>
+                            {q.approved && (
+                              <span className="flex items-center gap-1 text-xs font-bold text-teal-600">
+                                <CheckCircle2 className="h-3.5 w-3.5" /> Aprobada
+                              </span>
+                            )}
+                          </div>
+
+                          <textarea
+                            value={q.pregunta}
+                            onChange={(e) => updateQuestion(qIndex, 'pregunta', e.target.value)}
+                            rows={2}
+                            placeholder="Enunciado de la pregunta"
+                            className="w-full rounded-xl border-2 border-gray-200 px-3 py-2 text-sm text-gray-800 outline-none focus:border-teal-500 resize-none"
+                          />
+
+                          <div className="mt-2 space-y-1.5">
+                            {q.opciones.map((opt, optIndex) => (
+                              <div key={optIndex} className="flex items-center gap-2">
+                                <button
+                                  onClick={() => updateQuestion(qIndex, 'correcta', optIndex)}
+                                  className={`flex-shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center transition ${
+                                    q.correcta === optIndex ? 'border-teal-500 bg-teal-500' : 'border-gray-300 hover:border-teal-400'
+                                  }`}
+                                >
+                                  {q.correcta === optIndex && <Check className="h-3.5 w-3.5 text-white" />}
+                                </button>
+                                <input
+                                  type="text"
+                                  value={opt}
+                                  onChange={(e) => updateOption(qIndex, optIndex, e.target.value)}
+                                  placeholder={`OpciÃ³n ${String.fromCharCode(65 + optIndex)}`}
+                                  className={`flex-1 rounded-lg border px-3 py-1.5 text-sm outline-none transition ${
+                                    q.correcta === optIndex ? 'border-teal-300 bg-teal-50/50 focus:border-teal-500' : 'border-gray-200 focus:border-teal-400'
+                                  }`}
+                                />
+                              </div>
+                            ))}
+                          </div>
+
+                          <textarea
+                            value={q.explicacion}
+                            onChange={(e) => updateQuestion(qIndex, 'explicacion', e.target.value)}
+                            rows={2}
+                            placeholder="ExplicaciÃ³n / justificaciÃ³n"
+                            className="mt-2 w-full rounded-xl border-2 border-gray-200 px-3 py-2 text-sm text-gray-800 outline-none focus:border-teal-500 resize-none"
+                          />
+
+                          {!q.approved && (
+                            <button
+                              onClick={() => void handleApprove(qIndex)}
+                              disabled={busy}
+                              className="mt-2 w-full flex items-center justify-center gap-1.5 rounded-xl bg-teal-600 py-2.5 text-sm font-bold text-white transition hover:bg-teal-700 disabled:opacity-50"
+                            >
+                              <Check className="h-4 w-4" /> Aprobar individual
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {questions.length > 0 && (
+                    <button
+                      onClick={() => void handleComplete()}
+                      disabled={busy}
+                      className="mt-4 w-full flex items-center justify-center gap-2 rounded-xl border-2 border-teal-300 bg-teal-50 py-3 text-sm font-bold text-teal-700 transition hover:bg-teal-100 disabled:opacity-50"
+                    >
+                      <CheckCircle2 className="h-4 w-4" /> Marcar envÃ­o como completado
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      )}
+
+      {/* Reports tab */}
+      {tab === 'reports' && (
+        <div className="flex-1 px-4 py-8 overflow-y-auto">
+          <div className="mx-auto max-w-3xl">
+            <div className="mb-6 flex items-center justify-between">
+              <div>
+                <p className="text-sm font-bold uppercase tracking-widest text-red-600">ModeraciÃ³n</p>
+                <h1 className="mt-1 text-2xl font-extrabold text-gray-900">Reportes de preguntas</h1>
+                <p className="mt-2 text-gray-500">RevisÃ¡ y corregÃ­ reclamos enviados por los usuarios durante las partidas.</p>
+              </div>
+              <button
+                onClick={() => void fetchReports()}
+                disabled={loadingReports}
+                className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-600 hover:bg-gray-50 shadow-sm disabled:opacity-50"
+              >
+                {loadingReports ? 'Actualizando...' : 'Recargar'}
+              </button>
+            </div>
+
+            {loadingReports && reports.length === 0 ? (
+              <div className="rounded-3xl bg-white p-8 text-center shadow-lg">
+                <Loader2 className="mx-auto mb-3 h-8 w-8 animate-spin text-teal-600" />
+                <p className="text-sm font-semibold text-gray-500">Cargando reportes...</p>
+              </div>
+            ) : reports.length === 0 ? (
+              <div className="rounded-3xl bg-white p-8 text-center shadow-lg">
+                <Check className="mx-auto mb-3 h-8 w-8 text-teal-600" />
+                <p className="font-bold text-gray-800">No hay reportes pendientes</p>
+                <p className="mt-1 text-sm text-gray-500">Todas las preguntas reportadas fueron resueltas.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {reports.map((report) => (
+                  <div
+                    key={report.id}
+                    className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition hover:shadow-md"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 pb-3">
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-700">
+                        <Flag className="h-3 w-3" />
+                        {report.reason}
+                      </span>
+                      <span className="text-xs text-gray-400">
+                        {new Date(report.created_at).toLocaleString('es-AR', {
+                          day: '2-digit',
+                          month: '2-digit',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </span>
+                    </div>
+
+                    <div className="mt-3 space-y-2">
+                      {report.question_text && (
+                        <div className="rounded-xl bg-gray-50 p-3 text-sm font-medium text-gray-800 border border-gray-100">
+                          <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400 mb-1">Pregunta:</p>
+                          "{report.question_text}"
+                        </div>
+                      )}
+
+                      {report.details && (
+                        <div className="rounded-xl bg-amber-50/50 p-3 text-sm text-amber-900 border border-amber-100">
+                          <p className="text-[11px] font-bold uppercase tracking-wider text-amber-700 mb-1">Detalle del usuario:</p>
+                          {report.details}
+                        </div>
+                      )}
+
+                      <p className="text-[11px] text-gray-400">
+                        Identificador / Ãndice: <code className="rounded bg-gray-100 px-1 py-0.5 text-gray-600">{report.question_id}</code>
+                      </p>
+                    </div>
+
+                    {/* Propuesta de correcciÃ³n del usuario */}
+                    {report.suggested_fix && (
+                      <div className="rounded-xl border border-teal-200 bg-teal-50/70 p-3.5 space-y-2 mt-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-extrabold uppercase tracking-wide text-teal-800 flex items-center gap-1.5">
+                            <Sparkles className="h-3.5 w-3.5 text-teal-600" />
+                            CorrecciÃ³n propuesta por el usuario:
+                          </span>
+                          <button
+                            onClick={() => void handleApproveSuggestedFix(report)}
+                            disabled={busy}
+                            className="flex items-center gap-1 rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-bold text-white shadow hover:bg-teal-700 transition disabled:opacity-50"
+                          >
+                            <CheckCheck className="h-3.5 w-3.5" />
+                            Aprobar y aplicar cambio
+                          </button>
+                        </div>
+
+                        <p className="text-xs font-medium text-gray-800">
+                          <strong className="text-teal-900">Enunciado:</strong> "{report.suggested_fix.pregunta}"
+                        </p>
+
+                        <div className="space-y-1">
+                          {Array.isArray(report.suggested_fix?.opciones) &&
+                            report.suggested_fix.opciones.map((opt, i) => (
+                              <div key={i} className="flex items-center gap-2 text-xs">
+                                <span
+                                  className={`w-5 h-5 rounded-full flex items-center justify-center font-bold text-[10px] ${
+                                    report.suggested_fix?.correcta === i
+                                      ? 'bg-teal-600 text-white'
+                                      : 'bg-gray-200 text-gray-600'
+                                  }`}
+                                >
+                                  {String.fromCharCode(65 + i)}
+                                </span>
+                                <span
+                                  className={
+                                    report.suggested_fix?.correcta === i
+                                      ? 'font-bold text-teal-900'
+                                      : 'text-gray-600'
+                                  }
+                                >
+                                  {opt}
+                                </span>
+                              </div>
+                            ))}
+                        </div>
+
+                        {report.suggested_fix.explicacion && (
+                          <p className="text-xs text-gray-600 pt-1 border-t border-teal-100">
+                            <strong className="text-teal-900">ExplicaciÃ³n:</strong> {report.suggested_fix.explicacion}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Editor integrado si se presiona "Corregir Pregunta" */}
+                    {editingReportId === report.id && editingDraft && (
+                      <div className="mt-4 rounded-xl border-2 border-teal-500/30 bg-teal-50/40 p-4 space-y-3">
+                        <p className="text-xs font-bold uppercase text-teal-800">Editar y Corregir:</p>
+
+                        <textarea
+                          value={editingDraft.pregunta}
+                          onChange={(e) => setEditingDraft({ ...editingDraft, pregunta: e.target.value })}
+                          rows={2}
+                          className="w-full rounded-xl border border-teal-300 bg-white p-2.5 text-sm outline-none focus:ring-2 focus:ring-teal-500"
+                          placeholder="Enunciado de la pregunta"
+                        />
+
+                        <div className="space-y-1.5">
+                          {Array.isArray(editingDraft?.opciones) &&
+                            editingDraft.opciones.map((opt, idx) => (
+                              <div key={idx} className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingDraft({ ...editingDraft, correcta: idx })}
+                                  className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition ${
+                                    editingDraft.correcta === idx
+                                      ? 'border-teal-600 bg-teal-600 text-white'
+                                      : 'border-gray-300 bg-white hover:border-teal-400'
+                                  }`}
+                                  title="Marcar como correcta"
+                                >
+                                  {editingDraft.correcta === idx && <Check className="w-3.5 h-3.5" />}
+                                </button>
+                                <input
+                                  type="text"
+                                  value={opt}
+                                  onChange={(e) => {
+                                    const nuevas = [...(editingDraft.opciones || [])];
+                                    nuevas[idx] = e.target.value;
+                                    setEditingDraft({ ...editingDraft, opciones: nuevas });
+                                  }}
+                                  placeholder={`OpciÃ³n ${String.fromCharCode(65 + idx)}`}
+                                  className={`flex-1 rounded-lg border bg-white px-3 py-1.5 text-sm outline-none ${
+                                    editingDraft.correcta === idx ? 'border-teal-400 font-medium' : 'border-gray-200'
+                                  }`}
+                                />
+                              </div>
+                            ))}
+                        </div>
+
+                        <textarea
+                          value={editingDraft.explicacion}
+                          onChange={(e) => setEditingDraft({ ...editingDraft, explicacion: e.target.value })}
+                          rows={2}
+                          className="w-full rounded-xl border border-gray-200 bg-white p-2.5 text-sm outline-none focus:border-teal-500"
+                          placeholder="ExplicaciÃ³n / justificaciÃ³n"
+                        />
+
+                        <div className="flex justify-end gap-2 pt-2">
+                          <button
+                            onClick={() => { setEditingReportId(null); setEditingDraft(null); }}
+                            className="rounded-xl px-3 py-1.5 text-xs font-semibold text-gray-500 hover:text-gray-700"
+                          >
+                            Cancelar ediciÃ³n
+                          </button>
+                          <button
+                            onClick={() => void handleSaveReportFix(report)}
+                            disabled={busy}
+                            className="flex items-center gap-1.5 rounded-xl bg-teal-600 px-4 py-2 text-xs font-bold text-white shadow hover:bg-teal-700 transition disabled:opacity-50"
+                          >
+                            <Save className="h-3.5 w-3.5" />
+                            Guardar cambios y resolver reporte
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="mt-4 flex items-center justify-end gap-2 border-t border-gray-100 pt-3">
+                      <button
+                        onClick={() => handleStartEditReport(report)}
+                        disabled={busy}
+                        className="flex items-center gap-1 rounded-xl bg-teal-50 border border-teal-200 px-3.5 py-2 text-xs font-bold text-teal-700 transition hover:bg-teal-100 disabled:opacity-50"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                        {editingReportId === report.id ? 'Cerrar ediciÃ³n' : 'Corregir pregunta'}
+                      </button>
+                      <button
+                        onClick={() => void handleDismissReport(report.id)}
+                        disabled={busy}
+                        className="rounded-xl bg-gray-100 px-3.5 py-2 text-xs font-bold text-gray-600 transition hover:bg-gray-200 disabled:opacity-50"
+                      >
+                        Descartar reporte
+                      </button>
+                      <button
+                        onClick={() => void handleDeleteReportedQuestion(report)}
+                        disabled={busy}
+                        className="flex items-center gap-1 rounded-xl bg-red-600 px-3.5 py-2 text-xs font-bold text-white transition hover:bg-red-700 disabled:opacity-50"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        Eliminar pregunta
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+--- N:\Medicina\6to\Aprobados\project-bolt-sb1-tducdbwf\project\src\components\CollaborateModal.tsx ---
+import { useCallback, useRef, useState } from 'react';
+import { Upload, X, FileText, CheckCircle2, AlertCircle, Loader2, Bell } from 'lucide-react';
+import { uploadSubmission, validateFile, type MaterialType } from '@/utils/submissions';
+import { notificationSupported, requestNotificationPermission, registerBrowserPushSubscription, getOrCreateSessionId } from '@/utils/notifications';
+
+interface CollaborateModalProps {
+  open: boolean;
+  onClose: () => void;
+}
+
+const MATERIAL_OPTIONS: { value: MaterialType; label: string; description: string }[] = [
+  { value: 'apunte', label: 'Apunte / Resumen teÃ³rico', description: 'ResÃºmenes, teorÃ­a, esquemas' },
+  { value: 'preguntero_choice', label: 'Preguntero / Choice ya armado', description: 'Preguntas mÃºltiples choice' },
+  { value: 'pregunta_respuesta', label: 'Preguntas con Respuesta modelo', description: 'Preguntas abiertas con respuesta' },
+];
+
+export function CollaborateModal({ open, onClose }: CollaborateModalProps) {
+  const [university, setUniversity] = useState('');
+  const [subject, setSubject] = useState('');
+  const [chair, setChair] = useState('');
+  const [sourceNotes, setSourceNotes] = useState('');
+  const [materialType, setMaterialType] = useState<MaterialType>('apunte');
+  const [file, setFile] = useState<File | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [success, setSuccess] = useState(false);
+  const [error, setError] = useState('');
+  const [notifyWhenApproved, setNotifyWhenApproved] = useState(false);
+  const [notifyStatus, setNotifyStatus] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const resetForm = useCallback(() => {
+    setUniversity('');
+    setSubject('');
+    setChair('');
+    setSourceNotes('');
+    setMaterialType('apunte');
+    setFile(null);
+    setProgress(0);
+    setSuccess(false);
+    setError('');
+  }, []);
+
+  const handleClose = useCallback(() => {
+    if (uploading) return;
+    resetForm();
+    onClose();
+  }, [uploading, resetForm, onClose]);
+
+  const handleFile = useCallback((f: File) => {
+    const validationError = validateFile(f);
+    if (validationError) {
+      setError(validationError);
+      setFile(null);
+      return;
+    }
+    setError('');
+    setFile(f);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    const f = e.dataTransfer.files?.[0];
+    if (f) handleFile(f);
+  }, [handleFile]);
+
+  const handleSubmit = async () => {
+    if (!university.trim() || !subject.trim() || !chair.trim() || !file) {
+      setError('CompletÃ¡ los campos obligatorios y adjuntÃ¡ un archivo.');
+      return;
+    }
+
+    setUploading(true);
+    setError('');
+    setProgress(10);
+
+    const progressInterval = setInterval(() => {
+      setProgress((p) => Math.min(p + 15, 85));
+    }, 300);
+
+    try {
+      if (notifyWhenApproved && notificationSupported()) {
+        const permission = await requestNotificationPermission();
+        if (permission === 'granted') {
+          try {
+            await registerBrowserPushSubscription(getOrCreateSessionId());
+            setNotifyStatus('NotificaciÃ³n autorizada.');
+          } catch (registerErr) {
+            console.warn('No se pudo registrar la subscripciÃ³n push:', registerErr);
+            setNotifyStatus('Se guardÃ³ el envÃ­o, pero la notificaciÃ³n no pudo registrarse.');
+          }
+        } else {
+          setNotifyStatus('La notificaciÃ³n quedÃ³ deshabilitada en este navegador.');
+        }
+      }
+
+      await uploadSubmission({
+        university: university.trim(),
+        subject: subject.trim(),
+        chair: chair.trim(),
+        sourceNotes: sourceNotes.trim() || undefined,
+        materialType,
+        file,
+      });
+      clearInterval(progressInterval);
+      setProgress(100);
+      setSuccess(true);
+      setTimeout(() => {
+        resetForm();
+        onClose();
+      }, 2000);
+    } catch (err) {
+      clearInterval(progressInterval);
+      const message = err instanceof Error ? err.message : 'No se pudo enviar el material.';
+      setError(message);
+      setProgress(0);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={handleClose} />
+
+      <div className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto scrollbar-hide bg-white rounded-3xl shadow-2xl animate-pop-in">
+        {/* Header */}
+        <div className="sticky top-0 z-10 flex items-center justify-between px-6 py-4 bg-white border-b border-gray-100 rounded-t-3xl">
+          <h2 className="text-lg font-extrabold text-gray-900">Colaborar / Enviar material</h2>
+          <button
+            onClick={handleClose}
+            disabled={uploading}
+            className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 disabled:opacity-30"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-4">
+          {success ? (
+            <div className="flex flex-col items-center py-8 text-center animate-pop-in">
+              <CheckCircle2 className="h-14 w-14 text-teal-500 mb-4" />
+              <p className="text-lg font-bold text-gray-900">Â¡Material enviado!</p>
+              <p className="mt-1 text-sm text-gray-500">Gracias por colaborar. Tu aporte serÃ¡ revisado.</p>
+            </div>
+          ) : (
+            <>
+              {/* Required fields */}
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1.5">
+                  Universidad *
+                </label>
+                <input
+                  type="text"
+                  value={university}
+                  onChange={(e) => setUniversity(e.target.value)}
+                  placeholder="Ej: Universidad de Buenos Aires"
+                  maxLength={200}
+                  className="w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-sm text-gray-800 outline-none focus:border-teal-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1.5">
+                  Materia *
+                </label>
+                <input
+                  type="text"
+                  value={subject}
+                  onChange={(e) => setSubject(e.target.value)}
+                  placeholder="Ej: InfectologÃ­a"
+                  maxLength={200}
+                  className="w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-sm text-gray-800 outline-none focus:border-teal-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1.5">
+                  CÃ¡tedra / Docente *
+                </label>
+                <input
+                  type="text"
+                  value={chair}
+                  onChange={(e) => setChair(e.target.value)}
+                  placeholder="Ej: CÃ¡tedra 1 - Dr. PÃ©rez"
+                  maxLength={200}
+                  className="w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-sm text-gray-800 outline-none focus:border-teal-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1.5">
+                  Notas / AÃ±o de la fuente
+                </label>
+                <input
+                  type="text"
+                  value={sourceNotes}
+                  onChange={(e) => setSourceNotes(e.target.value)}
+                  placeholder="Ej: 2do aÃ±o, 2025"
+                  maxLength={200}
+                  className="w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-sm text-gray-800 outline-none focus:border-teal-500"
+                />
+              </div>
+
+              {/* Material type */}
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">
+                  Tipo de material *
+                </label>
+                <div className="space-y-2">
+                  {MATERIAL_OPTIONS.map((opt) => (
+                    <label
+                      key={opt.value}
+                      className={`flex items-start gap-3 rounded-xl border-2 p-3 cursor-pointer transition-all ${
+                        materialType === opt.value
+                          ? 'border-teal-500 bg-teal-50'
+                          : 'border-gray-200 hover:border-teal-300'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="materialType"
+                        value={opt.value}
+                        checked={materialType === opt.value}
+                        onChange={() => setMaterialType(opt.value)}
+                        className="mt-1 accent-teal-600"
+                      />
+                      <div>
+                        <p className="text-sm font-bold text-gray-800">{opt.label}</p>
+                        <p className="text-xs text-gray-500">{opt.description}</p>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border-2 border-teal-100 bg-teal-50/50 p-4">
+                <label className="flex items-center justify-between gap-3 cursor-pointer">
+                  <span className="flex items-center gap-2 text-sm font-black text-gray-800">
+                    <Bell className="h-4 w-4 text-teal-600" />
+                    Recibir notificaciÃ³n cuando se apruebe
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={notifyWhenApproved}
+                    onChange={(e) => setNotifyWhenApproved(e.target.checked)}
+                    className="accent-teal-600 h-4 w-4"
+                  />
+                </label>
+                {notifyStatus && <p className="mt-2 text-xs font-semibold text-teal-700">{notifyStatus}</p>}
+              </div>
+
+              {/* Drag & Drop */}
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">
+                  Archivo (PDF, PPTX, PNG, JPG, DOCX, TXT) *
+                </label>
+                <div
+                  onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                  onDragLeave={() => setDragOver(false)}
+                  onDrop={handleDrop}
+                  onClick={() => inputRef.current?.click()}
+                  className={`rounded-xl border-2 border-dashed p-6 text-center cursor-pointer transition-all ${
+                    dragOver
+                      ? 'border-teal-500 bg-teal-50'
+                      : file
+                      ? 'border-teal-400 bg-teal-50/50'
+                      : 'border-gray-300 hover:border-teal-400 hover:bg-gray-50'
+                  }`}
+                >
+                  <input
+                    ref={inputRef}
+                    type="file"
+                    accept=".pdf,.pptx,.docx,.png,.jpg,.jpeg,.txt,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/png,image/jpeg,text/plain"
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
+                    className="hidden"
+                  />
+                  {file ? (
+                    <div className="flex items-center justify-center gap-2">
+                      <FileText className="h-5 w-5 text-teal-600" />
+                      <span className="text-sm font-medium text-gray-700">{file.name}</span>
+                      <span className="text-xs text-gray-400">({(file.size / 1024 / 1024).toFixed(1)} MB)</span>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-2">
+                      <Upload className="h-8 w-8 text-gray-400" />
+                      <p className="text-sm font-medium text-gray-500">ArrastrÃ¡ tu archivo aquÃ­ o hacÃ© clic</p>
+                      <p className="text-xs text-gray-400">PDF, PPTX, DOCX o imÃ¡genes Â· MÃ¡x 150 MB</p>
+                    </div>
+                  )}
+                </div>
+                {file && (
+                  <button
+                    onClick={() => setFile(null)}
+                    className="mt-2 text-xs font-semibold text-red-500 hover:text-red-700"
+                  >
+                    Quitar archivo
+                  </button>
+                )}
+              </div>
+
+              {/* Progress bar */}
+              {uploading && progress > 0 && (
+                <div className="animate-fade-in">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-xs font-semibold text-gray-500">Subiendo...</span>
+                    <span className="text-xs font-bold text-teal-600">{progress}%</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-teal-500 to-emerald-500 transition-all duration-300"
+                      style={{ width: `${progress}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Error */}
+              {error && (
+                <div className="flex items-start gap-2 rounded-xl bg-red-50 p-3 animate-fade-in">
+                  <AlertCircle className="h-4 w-4 text-red-500 flex-shrink-0 mt-0.5" />
+                  <p className="text-xs font-semibold text-red-700">{error}</p>
+                </div>
+              )}
+
+              {/* Submit */}
+              <button
+                onClick={handleSubmit}
+                disabled={uploading || !university.trim() || !subject.trim() || !chair.trim() || !file}
+                className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 py-4 font-bold text-white transition-all hover:from-teal-700 hover:to-emerald-700 active:scale-[0.98] shadow-lg disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
+              >
+                {uploading ? (
+                  <>
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                    Enviando...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="h-5 w-5" />
+                    Enviar material
+                  </>
+                )}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+--- N:\Medicina\6to\Aprobados\project-bolt-sb1-tducdbwf\project\src\components\ErrorBoundary.tsx ---
+import { Component, type ReactNode } from 'react';
+import { AlertCircle } from 'lucide-react';
+
+interface Props {
+  children: ReactNode;
+  fallback?: ReactNode;
+}
+
+interface State {
+  hasError: boolean;
+  message: string;
+}
+
+export class ErrorBoundary extends Component<Props, State> {
+  state: State = { hasError: false, message: '' };
+
+  static getDerivedStateFromError(error: Error): State {
+    return { hasError: true, message: error.message };
+  }
+
+  render() {
+    if (this.state.hasError) {
+      if (this.props.fallback) return this.props.fallback;
+      return (
+        <div className="flex min-h-screen items-center justify-center bg-gray-50 p-4">
+          <div className="max-w-md rounded-3xl bg-white p-8 text-center shadow-xl">
+            <AlertCircle className="mx-auto mb-4 h-12 w-12 text-red-400" />
+            <h2 className="text-lg font-bold text-gray-800">Algo saliÃ³ mal</h2>
+            <p className="mt-2 text-sm text-gray-500">{this.state.message}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="mt-4 rounded-xl bg-teal-600 px-6 py-2.5 text-sm font-bold text-white hover:bg-teal-700"
+            >
+              Recargar
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+--- N:\Medicina\6to\Aprobados\project-bolt-sb1-tducdbwf\project\src\components\GameScreen.tsx ---
+import { ReportModal } from './ReportModal';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { Check, X, Clock, ChevronRight, Flag } from 'lucide-react';
+import { getAllQuestions, calculatePoints, TIME_PER_QUESTION } from '@/utils/game';
+import type { AnswerRecord, Question } from '@/types';
+
+interface GameScreenProps {
+  questions?: Question[];
+  questionIndices: number[];
+  onFinish: (answers: AnswerRecord[]) => void;
+}
+
+const LETTERS = ['A', 'B', 'C', 'D'];
+
+function shuffleQuestionOptions(q: Question): Question {
+  const originalOptions = [...q.opciones];
+  const correctText = originalOptions[q.correcta];
+
+  const shuffled = [...originalOptions];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+
+  return {
+    ...q,
+    opciones: shuffled,
+    correcta: shuffled.indexOf(correctText),
+  };
+}
+
+export function GameScreen({ questions: customQuestions, questionIndices, onFinish }: GameScreenProps) {
+  const [currentIdx, setCurrentIdx] = useState(0);
+  const [timeLeft, setTimeLeft] = useState(TIME_PER_QUESTION);
+  const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
+  const [showFeedback, setShowFeedback] = useState(false);
+  const [answers, setAnswers] = useState<AnswerRecord[]>([]);
+  const answersRef = useRef<AnswerRecord[]>([]);
+  const [isReportOpen, setIsReportOpen] = useState(false);
+  const answeredRef = useRef(false);
+
+  // Si vienen preguntas personalizadas desde Supabase las usamos directo; de lo contrario fallback al json
+  const activeQuestions = customQuestions && customQuestions.length > 0 ? customQuestions : getAllQuestions();
+  const rawQuestion = customQuestions && customQuestions.length > 0
+    ? activeQuestions[currentIdx]
+    : activeQuestions[questionIndices[currentIdx]];
+
+  const question = useMemo(() => {
+    if (!rawQuestion) return rawQuestion;
+    return shuffleQuestionOptions(rawQuestion);
+  }, [rawQuestion]);
+
+  const totalQuestions = customQuestions && customQuestions.length > 0 ? customQuestions.length : questionIndices.length;
+  const currentScore = answers.reduce((sum, a) => sum + a.points, 0);
+
+  useEffect(() => {
+    answeredRef.current = false;
+    setTimeLeft(TIME_PER_QUESTION);
+    setSelectedAnswer(null);
+    setShowFeedback(false);
+  }, [currentIdx]);
+
+  useEffect(() => {
+    answersRef.current = answers;
+  }, [answers]);
+
+  const recordAnswer = useCallback((idx: number | null) => {
+    if (answeredRef.current || !question) return;
+    answeredRef.current = true;
+    const correct = idx !== null && idx === question.correcta;
+    const points = correct ? calculatePoints(timeLeft) : 0;
+    const selectedOption = idx === null ? null : question.opciones[idx] ?? null;
+
+    const answer: AnswerRecord = {
+      questionIndex: questionIndices[currentIdx] ?? currentIdx,
+      questionText: question.pregunta,
+      questionOptions: question.opciones,
+      selectedIndex: idx,
+      selectedOption,
+      correct,
+      timeLeft,
+      points,
+    };
+
+    const nextAnswers = [...answersRef.current, answer];
+    answersRef.current = nextAnswers;
+    setAnswers(nextAnswers);
+    setSelectedAnswer(idx);
+    setShowFeedback(true);
+  }, [currentIdx, question, questionIndices, timeLeft]);
+
+  useEffect(() => {
+    if (showFeedback || answeredRef.current) return;
+    if (timeLeft <= 0) {
+      recordAnswer(null);
+      return;
+    }
+    const id = setTimeout(() => setTimeLeft((t) => t - 1), 1000);
+    return () => clearTimeout(id);
+  }, [timeLeft, showFeedback, recordAnswer]);
+
+  const handleNext = () => {
+    if (currentIdx < totalQuestions - 1) {
+      setCurrentIdx((i) => i + 1);
+    } else {
+      onFinish(answersRef.current);
+    }
+  };
+
+  if (!question) return null;
+
+  const timerPercent = (timeLeft / TIME_PER_QUESTION) * 100;
+  const timerColor =
+    timeLeft > 12 ? 'bg-teal-500' : timeLeft > 6 ? 'bg-amber-500' : 'bg-red-500';
+  const timerPulse = timeLeft <= 5 && !showFeedback;
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-teal-50 flex flex-col">
+      {/* Header */}
+      <div className="px-4 pt-6 pb-4">
+        <div className="max-w-2xl mx-auto">
+          <div className="flex items-center justify-center gap-2 mb-3">
+            {Array.from({ length: totalQuestions }).map((_, i) => (
+              <div
+                key={i}
+                className={`h-2 rounded-full transition-all duration-300 ${
+                  i === currentIdx
+                    ? 'w-8 bg-teal-600'
+                    : i < currentIdx
+                    ? 'w-2 bg-teal-400'
+                    : 'w-2 bg-gray-300'
+                }`}
+              />
+            ))}
+          </div>
+          <div className="flex items-center justify-between px-1">
+            <p className="text-sm font-medium text-gray-500">
+              Pregunta {currentIdx + 1} de {totalQuestions}
+            </p>
+            <p className="text-sm font-bold text-teal-600">{currentScore} pts</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Question card */}
+      <div className="flex-1 px-4 pb-6">
+        <div className="max-w-2xl mx-auto">
+          <div className="bg-white rounded-3xl shadow-xl overflow-hidden">
+            {/* Timer bar */}
+            <div className="h-1.5 bg-gray-100 relative">
+              <div
+                className={`h-full transition-all duration-1000 ease-linear ${timerColor} ${timerPulse ? 'animate-timer-pulse' : ''}`}
+                style={{ width: `${timerPercent}%` }}
+              />
+            </div>
+
+            <div className="p-6 md:p-8">
+              {/* Timer display & Report Button */}
+              <div className="flex items-center justify-between mb-6">
+                <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-gray-500">
+                  <Clock className={`w-4 h-4 ${timeLeft <= 5 ? 'text-red-500' : 'text-teal-600'}`} />
+                  {timeLeft}s
+                </span>
+
+                <button
+                  type="button"
+                  onClick={() => setIsReportOpen(true)}
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-400 hover:text-red-500 transition-colors py-1 px-2 rounded-lg hover:bg-red-50"
+                  title="Reportar error en la pregunta"
+                >
+                  <Flag className="w-3.5 h-3.5" />
+                  <span>Reportar</span>
+                </button>
+              </div>
+
+              {/* Question */}
+              <h2
+                className="text-xl md:text-2xl font-bold text-gray-800 leading-snug mb-6 animate-fade-in"
+                key={currentIdx}
+              >
+                {question.pregunta}
+              </h2>
+
+              {/* Options */}
+              <div className="space-y-3">
+                {question.opciones.map((opcion, idx) => {
+                  const isCorrect = idx === question.correcta;
+                  const isSelected = idx === selectedAnswer;
+                  let style = 'border-gray-200 hover:border-teal-400 hover:bg-teal-50';
+                  let badgeStyle = 'bg-gray-100 text-gray-600';
+
+                  if (showFeedback) {
+                    if (isCorrect) {
+                      style = 'border-green-500 bg-green-50';
+                      badgeStyle = 'bg-green-500 text-white';
+                    } else if (isSelected) {
+                      style = 'border-red-500 bg-red-50';
+                      badgeStyle = 'bg-red-500 text-white';
+                    } else {
+                      style = 'border-gray-200 opacity-50';
+                    }
+                  }
+
+                  return (
+                    <button
+                      key={idx}
+                      onClick={() => recordAnswer(idx)}
+                      disabled={showFeedback}
+                      className={`w-full text-left px-4 py-4 rounded-2xl border-2 transition-all duration-200 flex items-center gap-3 ${style} ${!showFeedback ? 'active:scale-[0.99] cursor-pointer' : 'cursor-default'} ${isSelected && !isCorrect ? 'animate-shake' : ''}`}
+                    >
+                      <span className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm flex-shrink-0 ${badgeStyle}`}>
+                        {showFeedback && isCorrect ? (
+                          <Check className="w-4 h-4" />
+                        ) : showFeedback && isSelected ? (
+                          <X className="w-4 h-4" />
+                        ) : (
+                          LETTERS[idx]
+                        )}
+                      </span>
+                      <span className="text-gray-800 font-medium text-sm md:text-base">
+                        {opcion}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Feedback */}
+              {showFeedback && (
+                <div className="mt-6 animate-slide-up">
+                  <div
+                    className={`rounded-2xl p-4 ${
+                      selectedAnswer === question.correcta
+                        ? 'bg-green-50 border border-green-200'
+                        : 'bg-red-50 border border-red-200'
+                    }`}
+                  >
+                    <p
+                      className={`font-bold mb-1 ${
+                        selectedAnswer === question.correcta
+                          ? 'text-green-700'
+                          : 'text-red-700'
+                      }`}
+                    >
+                      {selectedAnswer === question.correcta
+                        ? 'Â¡Correcto!'
+                        : selectedAnswer === null
+                        ? 'Â¡Se acabÃ³ el tiempo!'
+                        : 'Incorrecto'}
+                    </p>
+                    <p className="text-sm text-gray-700 leading-relaxed">
+                      {question.explicacion}
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleNext}
+                    className="w-full mt-4 bg-teal-600 hover:bg-teal-700 text-white font-bold py-3.5 rounded-xl transition-all shadow-lg hover:shadow-xl active:scale-[0.98] flex items-center justify-center gap-2"
+                  >
+                    {currentIdx < totalQuestions - 1 ? 'Siguiente' : 'Ver resultados'}
+                    <ChevronRight className="w-5 h-5" />
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Modal de Reporte */}
+      <ReportModal
+        isOpen={isReportOpen}
+        onClose={() => setIsReportOpen(false)}
+        questionId={String(questionIndices[currentIdx] ?? currentIdx)}
+        question={question}
+      />
+    </div>
+  );
+}
+--- N:\Medicina\6to\Aprobados\project-bolt-sb1-tducdbwf\project\src\components\RankingModal.tsx ---
+import { useEffect, useState } from 'react';
+import { Trophy, X } from 'lucide-react';
+import { loadGlobalRankingTopTen, loadRankingTopTen, type GlobalRankingEntry, type RankingEntry } from '@/utils/rankings';
+import type { Chair } from '@/types';
+
+interface RankingModalProps {
+  open: boolean;
+  chairId?: string | null;
+  chairs?: Chair[];
+  onClose: () => void;
+}
+
+export function RankingModal({ open, chairId, chairs = [], onClose }: RankingModalProps) {
+  const [entries, setEntries] = useState<Array<RankingEntry | GlobalRankingEntry>>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [view, setView] = useState<'global' | 'chair'>(chairId ? 'chair' : 'global');
+  const [selectedChair, setSelectedChair] = useState<string>(chairId ?? '');
+
+  useEffect(() => {
+    if (!open) return;
+    if (chairId) {
+      setSelectedChair(chairId);
+      setView('chair');
+    } else {
+      setView('global');
+      setSelectedChair('');
+    }
+  }, [open, chairId]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    let ignore = false;
+    const load = async () => {
+      setLoading(true);
+      setError('');
+      try {
+        const rows = view === 'chair' && selectedChair ? await loadRankingTopTen(selectedChair) : await loadGlobalRankingTopTen();
+        if (!ignore) setEntries(rows);
+      } catch (err) {
+        if (!ignore) setError(view === 'chair' ? 'No pudimos cargar el ranking de esta cÃ¡tedra.' : 'No pudimos cargar el ranking global.');
+      } finally {
+        if (!ignore) setLoading(false);
+      }
+    };
+
+    void load();
+    return () => {
+      ignore = true;
+    };
+  }, [open, view, selectedChair]);
+
+  if (!open) return null;
+
+  const isGlobal = view === 'global';
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
+      <div className="w-full max-w-2xl rounded-3xl bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-teal-100">
+              <Trophy className="h-6 w-6 text-teal-700" />
+            </div>
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wide text-gray-500">{isGlobal ? 'Global Top 50' : 'Top 10'}</p>
+              <h3 className="text-xl font-extrabold text-gray-900">{isGlobal ? 'Ranking General' : 'Ranking por cÃ¡tedra'}</h3>
+            </div>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-full p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="px-6 pt-4">
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={() => setView('global')} className={`rounded-full px-4 py-2 text-sm font-bold ${isGlobal ? 'bg-teal-700 text-white' : 'border border-teal-200 text-teal-700 bg-white'}`}>Ranking General</button>
+            <button type="button" onClick={() => setView('chair')} className={`rounded-full px-4 py-2 text-sm font-bold ${!isGlobal ? 'bg-teal-700 text-white' : 'border border-teal-200 text-teal-700 bg-white'}`}>Ranking por CÃ¡tedra</button>
+          </div>
+
+          {!isGlobal && (
+            <div className="mt-3">
+              <label className="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">CÃ¡tedra</label>
+              <select value={selectedChair} onChange={(e) => setSelectedChair(e.target.value)} className="w-full rounded-2xl border-2 border-gray-200 px-4 py-3 text-sm font-semibold text-gray-800 outline-none focus:border-teal-500">
+                <option value="">ElegÃ­ una cÃ¡tedra</option>
+                {chairs.map((chair) => <option key={chair.id} value={chair.id}>{chair.name}</option>)}
+              </select>
+            </div>
+          )}
+        </div>
+
+        <div className="max-h-[70vh] overflow-y-auto px-6 py-5">
+          {loading && <p className="text-sm font-semibold text-gray-500">Cargando rankingâ€¦</p>}
+          {error && <p className="rounded-2xl bg-red-50 p-4 text-sm font-semibold text-red-700">{error}</p>}
+
+          {!loading && !error && entries.length === 0 && (
+            <div className="rounded-2xl bg-teal-50 p-4 text-sm font-semibold text-teal-800">
+              {isGlobal ? 'AÃºn no hay puntajes globales. Â¡Se el primero!' : 'AÃºn no hay puntajes para esta cÃ¡tedra. Â¡Se el primero!'}
+            </div>
+          )}
+
+          {!loading && entries.length > 0 && (
+            <div className="space-y-3">
+              {entries.map((entry, index) => {
+                const gEntry = entry as GlobalRankingEntry;
+                const universityName = gEntry.universityName ?? 'Universidad sin nombre';
+                const subjectName = gEntry.subjectName ?? 'Materia sin nombre';
+                const chairName = gEntry.chairName ?? 'CÃ¡tedra sin nombre';
+
+                return (
+                  <div key={`${entry.player_name}-${entry.created_at}-${index}`} className="flex items-center justify-between rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white font-black text-teal-700 shadow-sm">
+                        #{index + 1}
+                      </span>
+                      <div>
+                        <p className="text-sm font-bold text-gray-900">{entry.player_name}</p>
+                        <p className="text-xs font-semibold text-gray-600">
+                          <span className="font-bold text-gray-700">Materia:</span> {subjectName} | <span className="font-bold text-gray-700">CÃ¡tedra:</span> {chairName}
+                        </p>
+                        <p className="text-[11px] font-medium text-gray-500">
+                          <span className="font-bold text-gray-700">Universidad:</span> {universityName}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <span className="block text-lg font-black text-teal-700">{entry.score}</span>
+                      <span className="text-[11px] font-bold uppercase text-gray-500">Puntos</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+--- N:\Medicina\6to\Aprobados\project-bolt-sb1-tducdbwf\project\src\components\ReportModal.tsx ---
+import React, { useState, useEffect } from 'react';
+import { supabase } from '../lib/supabase';
+import { Check, Edit3 } from 'lucide-react';
+import type { Question } from '../types';
+
+interface ReportModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  questionId: string;
+  question?: Question | null;
+}
+
+export function ReportModal({
+  isOpen,
+  onClose,
+  questionId,
+  question,
+}: ReportModalProps) {
+  const [reason, setReason] = useState('Respuesta incorrecta');
+  const [details, setDetails] = useState('');
+  const [wantToFix, setWantToFix] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+
+  // InicializaciÃ³n ultra segura de draft
+  const [draft, setDraft] = useState<Question>({
+    pregunta: '',
+    opciones: ['', '', '', ''],
+    correcta: 0,
+    explicacion: '',
+  });
+
+  // Cada vez que se abre el modal o cambia la pregunta, actualizamos el borrador
+  useEffect(() => {
+    if (question && isOpen) {
+      setDraft({
+        pregunta: question.pregunta || '',
+        opciones: Array.isArray(question.opciones) && question.opciones.length > 0
+          ? [...question.opciones]
+          : ['', '', '', ''],
+        correcta: typeof question.correcta === 'number' ? question.correcta : 0,
+        explicacion: question.explicacion || '',
+      });
+    }
+  }, [question, isOpen]);
+
+  if (!isOpen) return null;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSending(true);
+
+    const questionText = question?.pregunta || draft.pregunta || 'Pregunta sin texto';
+
+    const { error } = await supabase.from('question_reports').insert([
+      {
+        question_id: questionId,
+        question_text: questionText,
+        reason,
+        details: details.trim() || null,
+        raw_data: question ?? null,
+        suggested_fix: wantToFix ? draft : null,
+      },
+    ]);
+
+    setSending(false);
+    if (!error) {
+      setSent(true);
+      setTimeout(() => {
+        setSent(false);
+        setDetails('');
+        setWantToFix(false);
+        onClose();
+      }, 1500);
+    } else {
+      alert('Error al enviar el reporte. Intenta de nuevo.');
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm overflow-y-auto">
+      <div className="w-full max-w-lg rounded-2xl bg-gray-900 p-6 border border-gray-800 text-white shadow-2xl my-8 max-h-[90vh] flex flex-col">
+        <div className="flex justify-between items-center mb-4 flex-shrink-0">
+          <h3 className="text-lg font-bold flex items-center gap-2 text-red-400">
+            ðŸš© Reportar / Corregir Pregunta
+          </h3>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-white text-xl font-bold"
+          >
+            âœ•
+          </button>
+        </div>
+
+        {sent ? (
+          <div className="p-4 bg-emerald-950/40 border border-emerald-800 text-emerald-300 rounded-xl text-center">
+            âœ“ Â¡Gracias! Tu correcciÃ³n fue enviada para validaciÃ³n del administrador.
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-4 overflow-y-auto pr-1">
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1">
+                Motivo del reporte
+              </label>
+              <select
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                className="w-full rounded-xl bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-white focus:outline-none focus:border-red-500"
+              >
+                <option value="Respuesta incorrecta">Respuesta incorrecta</option>
+                <option value="Pregunta mal clasificada">Pregunta mal clasificada</option>
+                <option value="Pregunta ambigua o confusa">Pregunta ambigua o confusa</option>
+                <option value="Contenido duplicado / Inadecuado">Contenido duplicado / Inadecuado</option>
+                <option value="Otro">Otro</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1">
+                Comentario o bibliografÃ­a (opcional)
+              </label>
+              <textarea
+                value={details}
+                onChange={(e) => setDetails(e.target.value)}
+                placeholder="Ej: SegÃºn bibliografÃ­a oficial, la opciÃ³n correcta es la C..."
+                rows={2}
+                className="w-full rounded-xl bg-gray-800 border border-gray-700 p-2.5 text-sm text-white focus:outline-none focus:border-red-500"
+              />
+            </div>
+
+            {/* Toggle para proponer correcciÃ³n */}
+            <div className="pt-2 border-t border-gray-800">
+              <button
+                type="button"
+                onClick={() => setWantToFix(!wantToFix)}
+                className={`w-full flex items-center justify-between p-3 rounded-xl border transition ${
+                  wantToFix
+                    ? 'border-teal-500/50 bg-teal-950/30 text-teal-300'
+                    : 'border-gray-700 bg-gray-800/40 text-gray-400 hover:text-white'
+                }`}
+              >
+                <span className="flex items-center gap-2 text-xs font-bold">
+                  <Edit3 className="w-4 h-4" />
+                  Â¿QuerÃ©s dejar la pregunta corregida vos mismo?
+                </span>
+                <span className="text-xs underline">{wantToFix ? 'Ocultar' : 'Corregir'}</span>
+              </button>
+            </div>
+
+            {/* Formulario de correcciÃ³n propuesto por el usuario */}
+            {wantToFix && (
+              <div className="p-3.5 bg-gray-800/60 rounded-xl border border-gray-700 space-y-3 animate-fade-in">
+                <div>
+                  <label className="block text-[11px] font-bold uppercase text-gray-400 mb-1">
+                    Enunciado corregido:
+                  </label>
+                  <textarea
+                    value={draft.pregunta}
+                    onChange={(e) => setDraft({ ...draft, pregunta: e.target.value })}
+                    rows={2}
+                    className="w-full rounded-lg bg-gray-900 border border-gray-700 p-2 text-xs text-white focus:outline-none focus:border-teal-400"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold uppercase text-gray-400 mb-1">
+                    Opciones (tocÃ¡ el cÃ­rculo para marcar la correcta):
+                  </label>
+                  <div className="space-y-1.5">
+                    {Array.isArray(draft?.opciones) &&
+                      draft.opciones.map((opt, idx) => (
+                        <div key={idx} className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setDraft({ ...draft, correcta: idx })}
+                            className={`w-6 h-6 rounded-full border flex items-center justify-center flex-shrink-0 transition ${
+                              draft.correcta === idx
+                                ? 'bg-teal-500 border-teal-400 text-white'
+                                : 'border-gray-600 bg-gray-900 text-transparent hover:border-teal-400'
+                            }`}
+                          >
+                            {draft.correcta === idx && <Check className="w-3.5 h-3.5 text-white" />}
+                          </button>
+                          <input
+                            type="text"
+                            value={opt}
+                            onChange={(e) => {
+                              const newOpts = [...(draft.opciones || [])];
+                              newOpts[idx] = e.target.value;
+                              setDraft({ ...draft, opciones: newOpts });
+                            }}
+                            className={`flex-1 rounded-lg bg-gray-900 border px-2.5 py-1.5 text-xs text-white focus:outline-none ${
+                              draft.correcta === idx ? 'border-teal-500' : 'border-gray-700'
+                            }`}
+                          />
+                        </div>
+                      ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold uppercase text-gray-400 mb-1">
+                    ExplicaciÃ³n / JustificaciÃ³n corregida:
+                  </label>
+                  <textarea
+                    value={draft.explicacion}
+                    onChange={(e) => setDraft({ ...draft, explicacion: e.target.value })}
+                    rows={2}
+                    className="w-full rounded-lg bg-gray-900 border border-gray-700 p-2 text-xs text-white focus:outline-none focus:border-teal-400"
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-gray-800 flex-shrink-0">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 text-xs text-gray-400 hover:text-white"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={sending}
+                className="px-5 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-xs font-bold transition disabled:opacity-50"
+              >
+                {sending ? 'Enviando...' : wantToFix ? 'Enviar reporte con correcciÃ³n' : 'Enviar reporte'}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default ReportModal;
+--- N:\Medicina\6to\Aprobados\project-bolt-sb1-tducdbwf\project\src\components\ResultsScreen.tsx ---
+import { useState, useEffect, useRef } from 'react';
+import { Trophy, RefreshCw, Check, X, Swords, Home, Save, Medal, GraduationCap, Download, Share2, Camera } from 'lucide-react';
+import { toBlob } from 'html-to-image';
+import { encodeChallenge } from '@/utils/game';
+import { saveRankingScore } from '@/utils/rankings';
+import { ensureTaxonomyFromSubmission } from '@/utils/moderation';
+import type { AnswerRecord, ChallengeData, Chair, Subject, University } from '@/types';
+import type { TaxonomySelection } from '@/components/TaxonomyPicker';
+import { AdBanner } from './AdBanner';
+import { RankingModal } from '@/components/RankingModal';
+
+interface ResultsScreenProps {
+  answers: AnswerRecord[];
+  questionIndices: number[];
+  playerName: string;
+  challengeData: ChallengeData | null;
+  selection: TaxonomySelection | null;
+  universities: University[];
+  subjects: Subject[];
+  chairs: Chair[];
+  onRestart: () => void;
+  onHome: () => void;
+  onTaxonomyRefresh?: () => Promise<void> | void;
+}
+
+function WhatsAppIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+    </svg>
+  );
+}
+
+function useCountUp(target: number, duration: number) {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    const start = performance.now();
+    let raf: number;
+    const tick = (now: number) => {
+      const progress = Math.min((now - start) / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setCount(Math.round(target * eased));
+      if (progress < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [target, duration]);
+  return count;
+}
+
+export function ResultsScreen({
+  answers,
+  questionIndices,
+  playerName,
+  challengeData,
+  selection,
+  universities,
+  subjects,
+  chairs,
+  onRestart,
+  onHome,
+  onTaxonomyRefresh,
+}: ResultsScreenProps) {
+  const totalPoints = answers.reduce((sum, a) => sum + a.points, 0);
+  const correctCount = answers.filter((a) => a.correct).length;
+  const accuracyPercentage = answers.length ? Math.round((correctCount / answers.length) * 100) : 0;
+  const approved = accuracyPercentage >= 60;
+  const animatedScore = useCountUp(totalPoints, 1200);
+  const [shareUrl, setShareUrl] = useState('');
+  const [playerAlias, setPlayerAlias] = useState(playerName.trim() || 'AnÃ³nimo');
+  const [savingScore, setSavingScore] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [rankingOpen, setRankingOpen] = useState(false);
+  const [rankingPosition, setRankingPosition] = useState<number | null>(null);
+  const [downloadFallbackMessage, setDownloadFallbackMessage] = useState('');
+  const [showFailureStamp, setShowFailureStamp] = useState(false);
+  const storyCardRef = useRef<HTMLDivElement | null>(null);
+  const failAudioRef = useRef<HTMLAudioElement | null>(null);
+  const failStampTimerRef = useRef<number | undefined>(undefined);
+
+  const selectedUniversity = universities.find((u) => u.id === selection?.universityId)?.name ?? 'Universidad';
+  const selectedSubject = subjects.find((s) => s.id === selection?.subjectId)?.name ?? 'Materia';
+  const selectedChair = chairs.find((c) => c.id === selection?.chairId)?.name ?? 'CÃ¡tedra';
+
+  const handleDownloadStory = async () => {
+    if (!storyCardRef.current) return;
+
+    try {
+      const blob = await toBlob(storyCardRef.current, {
+        cacheBust: true,
+        pixelRatio: 2,
+        skipFonts: false,
+        type: 'image/png',
+      });
+
+      if (!blob) {
+        throw new Error('No se pudo convertir la tarjeta a imagen.');
+      }
+
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.download = `mi-puntaje-trivia.png`;
+      link.href = url;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Error generando imagen del story:', err);
+      setSaveError('No se pudo generar la imagen del Story.');
+    }
+  };
+
+  const handleShareStoryToInstagram = async () => {
+    if (!storyCardRef.current) {
+      return;
+    }
+
+    try {
+      const blob = await toBlob(storyCardRef.current, {
+        cacheBust: true,
+        pixelRatio: 2,
+        skipFonts: false,
+        type: 'image/png',
+      });
+
+      if (!blob) {
+        throw new Error('No se pudo crear la imagen del Story.');
+      }
+
+      const file = new File([blob], 'mi-puntaje-trivia.png', { type: 'image/png' });
+      if (typeof navigator !== 'undefined' && 'canShare' in navigator && typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: 'Mi puntaje en la Trivia',
+          text: 'Â¡MirÃ¡ cÃ³mo me fue en la trivia de estudiantes!',
+        });
+      } else {
+        await handleDownloadStory();
+        setDownloadFallbackMessage('Tu navegador no soporta compartir archivos. La imagen se descargÃ³ para subirla manualmente a Instagram Historias.');
+      }
+    } catch (err) {
+      console.error('Error compartiendo la tarjeta de story:', err);
+      await handleDownloadStory();
+      setDownloadFallbackMessage('No se pudo abrir el menÃº de Instagram desde aquÃ­. La imagen se descargÃ³ para subirla manualmente.');
+    }
+  };
+
+  useEffect(() => {
+    const data: ChallengeData = { q: questionIndices, n: playerName, s: totalPoints };
+    const encoded = encodeChallenge(data);
+    const url = `${window.location.origin}${window.location.pathname}?c=${encoded}`;
+    setShareUrl(url);
+  }, [questionIndices, playerName, totalPoints]);
+
+  const playAudio = (url: string) => {
+    try {
+      const audio = new Audio(url);
+      audio.volume = 0.8;
+      void audio.play().catch(() => {
+        console.info('La reproducciÃ³n automÃ¡tica fue bloqueada por el navegador.');
+      });
+    } catch (error) {
+      console.info('No se pudo inicializar el audio de feedback.', error);
+    }
+  };
+
+  const launchVictoryEffects = () => {
+    playAudio('https://www.myinstants.com/media/sounds/tada.mp3');
+  };
+
+  const launchDefeatEffects = () => {
+    const audio = new Audio('https://www.myinstants.com/media/sounds/sadtrombone.mp3');
+    audio.volume = 0.8;
+    failAudioRef.current = audio;
+    void audio.play().catch(() => {
+      console.info('La reproducciÃ³n automÃ¡tica bloqueada por el navegador para la derrota.');
+    });
+
+    setShowFailureStamp(true);
+    if (failStampTimerRef.current) {
+      clearTimeout(failStampTimerRef.current);
+    }
+
+    failStampTimerRef.current = window.setTimeout(() => {
+      setShowFailureStamp(false);
+      if (failAudioRef.current) {
+        failAudioRef.current.pause();
+        failAudioRef.current.currentTime = 0;
+        failAudioRef.current = null;
+      }
+    }, 2600);
+  };
+
+  useEffect(() => {
+    if (approved) {
+      launchVictoryEffects();
+    } else {
+      launchDefeatEffects();
+    }
+
+    return () => {
+      if (failStampTimerRef.current) {
+        clearTimeout(failStampTimerRef.current);
+      }
+      if (failAudioRef.current) {
+        failAudioRef.current.pause();
+        failAudioRef.current.currentTime = 0;
+      }
+    };
+  }, [approved]);
+
+  const clearFailureEffects = () => {
+    if (failStampTimerRef.current) {
+      clearTimeout(failStampTimerRef.current);
+    }
+    if (failAudioRef.current) {
+      failAudioRef.current.pause();
+      failAudioRef.current.currentTime = 0;
+      failAudioRef.current = null;
+    }
+    setShowFailureStamp(false);
+  };
+
+  const handleRestart = () => {
+    clearFailureEffects();
+    onRestart();
+  };
+
+  const handleHome = () => {
+    clearFailureEffects();
+    onHome();
+  };
+
+  const handleWhatsAppShare = () => {
+    const message = `Â¡Te desafÃ­o a superar mis ${totalPoints} puntos en Aprobados! Â¿PodrÃ¡s ganarle a un estudiante de medicina? ${shareUrl}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
+  };
+
+  const isChallenge = challengeData !== null;
+  const wonChallenge = isChallenge && totalPoints > challengeData!.s;
+  const tiedChallenge = isChallenge && totalPoints === challengeData!.s;
+
+  const getRating = () => {
+    if (correctCount === 5)
+      return { label: 'Â¡Excelente!', color: 'text-teal-600', stars: 5 };
+    if (correctCount >= 3)
+      return { label: 'Â¡Muy bien!', color: 'text-teal-600', stars: 4 };
+    if (correctCount >= 2)
+      return { label: 'Nada mal', color: 'text-amber-600', stars: 3 };
+    if (correctCount >= 1)
+      return { label: 'Hay que repasar', color: 'text-amber-600', stars: 2 };
+    return { label: 'A estudiar...', color: 'text-red-500', stars: 1 };
+  };
+
+  const rating = getRating();
+
+  const handleSaveScore = async () => {
+    if (!selection || !selection.chairId || selection.chairId === 'all') {
+      return;
+    }
+
+    setSaveError('');
+    setSaveSuccess(false);
+    setSavingScore(true);
+
+    try {
+      const taxonomy = await ensureTaxonomyFromSubmission({
+        university: selectedUniversity,
+        subject: selectedSubject,
+        chair: selectedChair,
+      });
+
+      const result = await saveRankingScore({
+        chairId: taxonomy.chairId,
+        playerName: playerAlias,
+        score: totalPoints,
+      });
+
+      setRankingPosition(result.position);
+      setSaveSuccess(true);
+
+      if (onTaxonomyRefresh) {
+        await Promise.resolve(onTaxonomyRefresh());
+      }
+    } catch (err) {
+      console.error('Error guardando puntaje o asegurando taxonomÃ­a:', err);
+      setSaveError('No pudimos guardar el puntaje. IntentÃ¡ nuevamente.');
+    } finally {
+      setSavingScore(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-teal-50">
+      {!approved && showFailureStamp && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-red-950/25 pointer-events-none">
+          <div className="text-center">
+            <div className="relative">
+              <div className="font-black text-[14rem] leading-none text-red-600 drop-shadow-[0_0_80px_rgba(239,68,68,0.95)] transform scale-[1.12] animate-[zoom-in_600ms_ease-out]" style={{ fontFamily: 'Impact, Haettenschweiler, "Arial Black", sans-serif' }}>
+                F
+              </div>
+              <div className="absolute left-1/2 top-1/2 h-40 w-40 -translate-x-1/2 -translate-y-1/2 rounded-full border-4 border-red-300/60" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="max-w-2xl mx-auto px-4 py-8">
+        {/* Score card */}
+        <div className="bg-white rounded-3xl shadow-xl p-8 text-center animate-pop-in mb-6">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-teal-100 rounded-2xl mb-4">
+            <Trophy className="w-8 h-8 text-teal-600" />
+          </div>
+          <p className="text-gray-500 font-medium mb-1">Tu puntaje</p>
+          <p className="text-5xl font-extrabold text-gray-900 mb-2">{animatedScore}</p>
+          <p className={`text-lg font-bold ${rating.color}`}>{rating.label}</p>
+
+          {/* Stars */}
+          <div className="flex items-center justify-center gap-1 mt-3">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <span
+                key={i}
+                className={`text-2xl ${i < rating.stars ? 'text-amber-400' : 'text-gray-200'}`}
+              >
+                â˜…
+              </span>
+            ))}
+          </div>
+
+          <div className="flex items-center justify-center gap-6 mt-6 pt-6 border-t border-gray-100">
+            <div>
+              <p className="text-2xl font-bold text-gray-900">{correctCount}/5</p>
+              <p className="text-sm text-gray-500">Correctas</p>
+            </div>
+            <div className="w-px h-10 bg-gray-200" />
+            <div>
+              <p className="text-2xl font-bold text-gray-900">{totalPoints}</p>
+              <p className="text-sm text-gray-500">Puntos</p>
+            </div>
+          </div>
+
+          {rankingPosition && (
+            <div className="mt-4 rounded-2xl bg-teal-50 border border-teal-200 px-4 py-3">
+              <p className="text-sm font-black uppercase tracking-wide text-teal-700">Ranking</p>
+              <p className="text-lg font-extrabold text-gray-900">Â¡Quedaste en el Puesto #{rankingPosition} del ranking!</p>
+            </div>
+          )}
+        </div>
+
+        {/* Challenge comparison */}
+        {isChallenge && (
+          <div
+            className={`rounded-3xl p-6 mb-6 animate-slide-up ${
+              wonChallenge
+                ? 'bg-green-50 border-2 border-green-200'
+                : tiedChallenge
+                ? 'bg-amber-50 border-2 border-amber-200'
+                : 'bg-red-50 border-2 border-red-200'
+            }`}
+          >
+            <div className="flex items-center justify-center gap-2 mb-4">
+              <Swords className="w-5 h-5 text-gray-400" />
+              <span className="text-sm font-bold text-gray-500 uppercase tracking-wide">
+                Resultado del desafÃ­o
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="text-center flex-1">
+                <p className="text-sm text-gray-500 font-medium">{challengeData!.n}</p>
+                <p className="text-3xl font-bold text-gray-800">{challengeData!.s}</p>
+                <p className="text-xs text-gray-400">puntos</p>
+              </div>
+              <div className="text-xl font-bold text-gray-300 px-4">VS</div>
+              <div className="text-center flex-1">
+                <p className="text-sm text-gray-500 font-medium">{playerName}</p>
+                <p className="text-3xl font-bold text-gray-800">{totalPoints}</p>
+                <p className="text-xs text-gray-400">puntos</p>
+              </div>
+            </div>
+            <p
+              className={`text-center font-bold mt-4 ${
+                wonChallenge
+                  ? 'text-green-600'
+                  : tiedChallenge
+                  ? 'text-amber-600'
+                  : 'text-red-500'
+              }`}
+            >
+              {wonChallenge
+                ? `Â¡Le ganaste a ${challengeData!.n}!`
+                : tiedChallenge
+                ? 'Â¡Empate!'
+                : `${challengeData!.n} te superÃ³ por ahora`}
+            </p>
+          </div>
+        )}
+
+        {/* Story card preview */}
+        {selection && selection.chairId && selection.chairId !== 'all' && (
+          <div className="bg-white rounded-3xl shadow-xl p-4 mb-6">
+            <div
+              ref={storyCardRef}
+              className="relative overflow-hidden rounded-3xl border-4 border-teal-700 bg-gradient-to-br from-teal-950 via-teal-900 to-emerald-700 p-8 text-white shadow-xl"
+              style={{ minHeight: 280 }}
+            >
+              <div className="absolute inset-0 opacity-20">
+                <div className="absolute -left-12 top-0 h-40 w-40 rounded-full bg-white blur-3xl" />
+                <div className="absolute right-0 bottom-0 h-48 w-48 rounded-full bg-emerald-200 blur-3xl" />
+              </div>
+
+              <div className="relative z-10 flex items-start justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-14 h-14 rounded-2xl bg-white/15 flex items-center justify-center ring-2 ring-white/60">
+                    <GraduationCap className="w-8 h-8 text-white" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-[0.2em] text-teal-100">Aprobados</p>
+                    <h3 className="text-2xl font-black leading-tight">{selectedUniversity}</h3>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="text-[11px] font-black uppercase tracking-[0.2em] text-teal-100">Ranking</span>
+                  <span className="block text-2xl font-black">#{rankingPosition ?? 'â€”'}</span>
+                </div>
+              </div>
+
+              <div className="relative z-10 mt-7">
+                <div className="inline-flex items-center gap-2 rounded-full bg-white/15 px-4 py-2 text-xs font-black uppercase tracking-wide">
+                  <Trophy className="w-4 h-4" />
+                  {selectedSubject}
+                </div>
+                <div className="mt-2">
+                  <p className="text-xs font-black uppercase tracking-wide text-teal-100">CÃ¡tedra</p>
+                  <p className="text-lg font-black">{selectedChair}</p>
+                </div>
+              </div>
+
+              <div className="relative z-10 mt-8 flex items-end justify-between gap-4">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.2em] text-teal-100">Puntaje final</p>
+                  <p className="text-5xl font-black leading-none">{totalPoints}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs font-black uppercase tracking-[0.2em] text-teal-100">Mi puesto</p>
+                  <p className="text-3xl font-black">#{rankingPosition ?? 'â€”'}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={handleDownloadStory}
+                className="inline-flex items-center justify-center gap-2 bg-teal-600 text-white font-bold px-4 py-3 rounded-2xl hover:bg-teal-700 transition shadow-md"
+              >
+                <Download className="w-4 h-4" />
+                Descargar Imagen
+              </button>
+              <button
+                type="button"
+                onClick={handleShareStoryToInstagram}
+                className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-[#F58529] via-[#DD2A7B] to-[#8134AF] text-white font-bold px-4 py-3 rounded-2xl hover:opacity-90 transition shadow-md"
+              >
+                <Camera className="w-4 h-4" />
+                Compartir en historias de Instagram
+              </button>
+            </div>
+
+            {downloadFallbackMessage && (
+              <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800">
+                {downloadFallbackMessage}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Ranking save row */}
+        {selection && selection.chairId && selection.chairId !== 'all' && (
+          <div className="bg-white rounded-3xl shadow-xl p-6 mb-6">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex-1 min-w-[170px]">
+                <label className="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">Tu nombre/apodo</label>
+                <input
+                  value={playerAlias}
+                  onChange={(e) => setPlayerAlias(e.target.value)}
+                  maxLength={50}
+                  className="w-full rounded-2xl border-2 border-gray-200 px-4 py-3 text-gray-800 outline-none focus:border-teal-500"
+                  placeholder="IngresÃ¡ tu apodo"
+                />
+              </div>
+              <div className="flex gap-2 items-end">
+                <button
+                  type="button"
+                  disabled={savingScore}
+                  onClick={handleSaveScore}
+                  className="inline-flex items-center justify-center gap-2 bg-teal-600 text-white font-bold px-5 py-3 rounded-2xl hover:bg-teal-700 transition shadow-md disabled:opacity-60"
+                >
+                  <Save className="w-4 h-4" />
+                  {savingScore ? 'Guardando...' : 'Guardar puntaje'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRankingOpen(true)}
+                  className="inline-flex items-center justify-center gap-2 bg-white border-2 border-teal-200 text-teal-700 font-bold px-5 py-3 rounded-2xl hover:bg-teal-50 transition"
+                >
+                  <Medal className="w-4 h-4" />
+                  Top 10
+                </button>
+              </div>
+            </div>
+            {saveError && <p className="mt-3 text-sm font-bold text-red-600">{saveError}</p>}
+            {saveSuccess && <p className="mt-3 text-sm font-bold text-green-700">Puntaje guardado con Ã©xito.</p>}
+          </div>
+        )}
+
+        {/* Answer review */}
+        <div className="bg-white rounded-3xl shadow-xl p-6 mb-6">
+          <h3 className="font-bold text-gray-800 mb-4">Repaso de respuestas</h3>
+          <div className="space-y-3">
+            {answers.map((answer, i) => {
+              const selectedText = answer.selectedIndex === null
+                ? 'Sin respuesta'
+                : answer.selectedOption ?? answer.questionOptions[answer.selectedIndex] ?? 'OpciÃ³n no disponible';
+
+              return (
+                <div key={i} className="flex items-start gap-3 p-3 rounded-xl bg-gray-50">
+                  <div
+                    className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                      answer.correct ? 'bg-green-100' : 'bg-red-100'
+                    }`}
+                  >
+                    {answer.correct ? (
+                      <Check className="w-4 h-4 text-green-600" />
+                    ) : (
+                      <X className="w-4 h-4 text-red-500" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-800 line-clamp-2">
+                      {answer.questionText ?? 'Pregunta'}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      {answer.correct
+                        ? `Correcta â€¢ +${answer.points} pts`
+                        : `Incorrecta â€¢ ${selectedText}`}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      OpciÃ³n elegida: {selectedText}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Action buttons */}
+        <div className="space-y-3 mb-6">
+          {/* 1. Desafiar por WhatsApp */}
+          <button
+            onClick={handleWhatsAppShare}
+            className="w-full bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold py-4 rounded-xl transition-all shadow-md hover:shadow-lg active:scale-[0.98] flex items-center justify-center gap-2"
+          >
+            <WhatsAppIcon className="w-5 h-5" />
+            Desafiar a un amigo por WhatsApp
+          </button>
+
+          {/* 2. Jugar de nuevo con la misma materia */}
+          <button
+            onClick={handleRestart}
+            className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-4 rounded-xl transition-all shadow-md hover:shadow-lg active:scale-[0.98] flex items-center justify-center gap-2"
+          >
+            <RefreshCw className="w-5 h-5" />
+            Jugar de nuevo
+          </button>
+
+          {/* 3. Volver al menÃº principal */}
+          <button
+            onClick={handleHome}
+            className="w-full bg-white border-2 border-gray-200 hover:border-gray-400 text-gray-700 font-bold py-4 rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+          >
+            <Home className="w-5 h-5 text-gray-500" />
+            Volver al menÃº principal
+          </button>
+        </div>
+
+        <RankingModal open={rankingOpen} chairId={selection?.chairId ?? null} chairs={chairs} onClose={() => setRankingOpen(false)} />
+
+        {/* Ad banner */}
+        <AdBanner />
+      </div>
+    </div>
+  );
+}
+--- N:\Medicina\6to\Aprobados\project-bolt-sb1-tducdbwf\project\src\components\StartScreen.tsx ---
+import { useState } from 'react';
+import { GraduationCap, Clock, Users, Trophy, Play, Swords, Upload } from 'lucide-react';
+import { getAllQuestions } from '@/utils/game';
+import { TaxonomyPicker } from '@/components/TaxonomyPicker';
+import { CollaborateModal } from '@/components/CollaborateModal';
+import { RankingModal } from '@/components/RankingModal';
+import type { TaxonomySelection } from '@/components/TaxonomyPicker';
+import type { Chair, ChallengeData, Subject, University } from '@/types';
+
+interface StartScreenProps {
+  onStart: (name: string, selection: TaxonomySelection) => void;
+  onQuickGame: (name: string) => void;
+  challengeData: ChallengeData | null;
+  universities: University[];
+  subjects: Subject[];
+  chairs: Chair[];
+  taxonomyError: string;
+  totalQuestions: number;
+  onOpenAdmin: () => void;
+  questionsLoadError?: string;
+}
+
+export function StartScreen({ onStart, onQuickGame, challengeData, universities, subjects, chairs, taxonomyError, totalQuestions, onOpenAdmin, questionsLoadError }: StartScreenProps) {
+  const [name, setName] = useState('');
+  const [selection, setSelection] = useState<TaxonomySelection>({ universityId: '', subjectId: '', chairId: '' });
+  const [collaborateOpen, setCollaborateOpen] = useState(false);
+  const [rankingOpen, setRankingOpen] = useState(false);
+
+  const canStart = Boolean(selection.universityId && selection.subjectId && selection.chairId);
+
+  const handleStart = () => {
+    if (!canStart) return;
+    onStart(name.trim() || 'AnÃ³nimo', selection);
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-teal-600 via-emerald-600 to-teal-700 flex items-center justify-center p-4 relative overflow-hidden">
+      {/* Decorative blobs */}
+      <div className="absolute top-0 -left-20 w-72 h-72 bg-teal-400/20 rounded-full blur-3xl" />
+      <div className="absolute bottom-0 -right-20 w-96 h-96 bg-emerald-400/20 rounded-full blur-3xl" />
+
+      <div className="w-full max-w-md relative z-10">
+        {/* Logo */}
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-20 h-20 bg-white/10 backdrop-blur-sm rounded-3xl mb-4 border border-white/20 animate-float shadow-xl">
+            <GraduationCap className="w-10 h-10 text-white" />
+          </div>
+          <h1 className="text-4xl font-extrabold text-white tracking-tight">Aprobados</h1>
+          <p className="text-teal-100 mt-2 text-lg">Trivia para estudiantes</p>
+        </div>
+
+        {/* Challenge banner */}
+        {challengeData && (
+          <div className="bg-amber-400/20 backdrop-blur-sm border border-amber-300/40 rounded-2xl p-4 mb-4 animate-fade-in">
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 bg-amber-400 rounded-xl flex items-center justify-center flex-shrink-0">
+                <Swords className="w-5 h-5 text-amber-900" />
+              </div>
+              <div>
+                <p className="text-white font-semibold">
+                  {challengeData.n} te desafÃ­a
+                </p>
+                <p className="text-amber-100 text-sm">
+                  Puntaje a superar: <span className="font-bold text-white">{challengeData.s}</span> puntos
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Card */}
+        <div className="bg-white rounded-3xl shadow-2xl p-6 animate-slide-up">
+          <div className="mb-4">
+            <button
+              type="button"
+              onClick={() => onQuickGame(name.trim() || 'AnÃ³nimo')}
+              className="w-full rounded-2xl bg-gradient-to-r from-fuchsia-600 via-rose-500 to-amber-500 px-4 py-3 text-sm font-black uppercase tracking-wide text-white shadow-lg hover:scale-[1.015] hover:shadow-xl transition-all"
+            >
+              Partida RÃ¡pida
+            </button>
+          </div>
+          <div className="mb-5 border-t border-gray-100 pt-5">
+            <div className="mb-3">
+              <p className="text-sm font-bold text-gray-800">ElegÃ­ tu clasificaciÃ³n</p>
+              <p className="mt-1 text-xs text-gray-500">Nos ayuda a ordenar las partidas por carrera y cÃ¡tedra.</p>
+            </div>
+            <TaxonomyPicker universities={universities} subjects={subjects} chairs={chairs} value={selection} onChange={setSelection} />
+            {taxonomyError && <p className="mt-3 rounded-xl bg-amber-50 p-3 text-xs font-semibold text-amber-800">{taxonomyError}</p>}
+            {questionsLoadError && <p className="mt-3 rounded-xl bg-rose-50 p-3 text-xs font-bold text-rose-700 border border-rose-200">{questionsLoadError}</p>}
+          </div>
+
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleStart()}
+            placeholder="Â¿CÃ³mo te llamÃ¡s?"
+            className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-teal-500 focus:outline-none transition-colors text-gray-800 placeholder-gray-400"
+            maxLength={20}
+          />
+
+          <button
+            onClick={handleStart}
+            disabled={!canStart}
+            className="w-full mt-4 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white font-bold py-4 rounded-xl transition-all shadow-lg hover:shadow-xl active:scale-[0.98] flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:from-gray-300 disabled:to-gray-400 disabled:shadow-none"
+          >
+            <Play className="w-5 h-5" fill="currentColor" />
+            {canStart ? (challengeData ? 'Aceptar el desafÃ­o' : 'Comenzar a jugar') : 'CompletÃ¡ la clasificaciÃ³n para jugar'}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setRankingOpen(true)}
+            className="mt-3 w-full rounded-xl border-2 border-teal-200 bg-teal-50 py-3 text-sm font-bold text-teal-700 transition hover:bg-teal-100 active:scale-[0.98]"
+          >
+            Ver ranking
+          </button>
+
+          <button type="button" onClick={() => setCollaborateOpen(true)} className="mt-4 w-full flex items-center justify-center gap-2 rounded-xl border-2 border-teal-200 bg-teal-50 py-3 text-sm font-bold text-teal-700 transition hover:bg-teal-100 active:scale-[0.98]">
+            <Upload className="h-4 w-4" />
+            Enviar material
+          </button>
+
+          <button type="button" onClick={onOpenAdmin} className="mt-3 w-full text-xs font-bold text-gray-400 transition hover:text-teal-700">Panel de administraciÃ³n</button>
+
+          {/* Info badges */}
+          <div className="flex items-center justify-center gap-3 mt-6 text-sm text-gray-500">
+            <div className="flex items-center gap-1.5">
+              <Trophy className="w-4 h-4 text-teal-600" />
+              <span>5 preguntas</span>
+            </div>
+            <div className="w-1 h-1 bg-gray-300 rounded-full" />
+            <div className="flex items-center gap-1.5">
+              <Clock className="w-4 h-4 text-teal-600" />
+              <span>25s c/u</span>
+            </div>
+            <div className="w-1 h-1 bg-gray-300 rounded-full" />
+            <div className="flex items-center gap-1.5">
+              <Users className="w-4 h-4 text-teal-600" />
+              <span>DesafÃ­a</span>
+            </div>
+          </div>
+        </div>
+
+        <p className="text-center text-teal-200/70 text-xs mt-6">
+          {totalQuestions} preguntas disponibles
+        </p>
+      </div>
+
+      <RankingModal open={rankingOpen} chairId={null} chairs={chairs} onClose={() => setRankingOpen(false)} />
+      <CollaborateModal open={collaborateOpen} onClose={() => setCollaborateOpen(false)} />
+    </div>
+  );
+}
+--- N:\Medicina\6to\Aprobados\project-bolt-sb1-tducdbwf\project\src\components\TaxonomyPicker.tsx ---
+import { useMemo, useState } from 'react';
+import { ChevronDown, Plus, Send, CheckCircle2 } from 'lucide-react';
+import { submitSuggestion } from '@/utils/taxonomy';
+import type { Chair, Subject, University } from '@/types';
+
+export interface TaxonomySelection {
+  universityId: string;
+  subjectId: string;
+  chairId: string;
+}
+
+interface TaxonomyPickerProps {
+  universities: University[];
+  subjects: Subject[];
+  chairs: Chair[];
+  value: TaxonomySelection;
+  onChange: (value: TaxonomySelection) => void;
+}
+
+type ProposalLevel = 'university' | 'subject' | 'chair';
+
+export function TaxonomyPicker({ universities, subjects, chairs, value, onChange }: TaxonomyPickerProps) {
+  const [proposalLevel, setProposalLevel] = useState<ProposalLevel | null>(null);
+  const [proposalName, setProposalName] = useState('');
+  const [proposalSent, setProposalSent] = useState(false);
+  const [proposalError, setProposalError] = useState('');
+
+  const availableSubjects = useMemo(
+    () => subjects.filter((subject) => subject.university_id === value.universityId),
+    [subjects, value.universityId],
+  );
+  const availableChairs = useMemo(
+    () => chairs.filter((chair) => chair.subject_id === value.subjectId),
+    [chairs, value.subjectId],
+  );
+
+  const openProposal = (level: ProposalLevel) => {
+    setProposalLevel(level);
+    setProposalName('');
+    setProposalSent(false);
+    setProposalError('');
+  };
+
+  const sendProposal = async () => {
+    if (!proposalLevel || proposalName.trim().length < 2) return;
+    setProposalError('');
+    try {
+      await submitSuggestion({
+        level: proposalLevel,
+        proposedName: proposalName,
+        universityId: proposalLevel === 'subject' ? value.universityId : undefined,
+        subjectId: proposalLevel === 'chair' ? value.subjectId : undefined,
+      });
+      setProposalSent(true);
+      setProposalName('');
+    } catch {
+      setProposalError('No pudimos enviar la propuesta. IntentÃ¡ nuevamente.');
+    }
+  };
+
+  const renderProposal = (level: ProposalLevel) => {
+    if (proposalLevel !== level) {
+      return (
+        <button type="button" onClick={() => openProposal(level)} className="mt-2 flex items-center gap-1.5 text-xs font-bold text-teal-700 hover:text-teal-900">
+          <Plus className="h-3.5 w-3.5" /> Proponer nueva
+        </button>
+      );
+    }
+
+    return (
+      <div className="mt-2 rounded-xl bg-teal-50 p-3">
+        <div className="flex gap-2">
+          <input
+            value={proposalName}
+            onChange={(event) => setProposalName(event.target.value)}
+            placeholder="EscribÃ­ el nombre"
+            maxLength={120}
+            className="min-w-0 flex-1 rounded-lg border border-teal-200 bg-white px-3 py-2 text-sm text-gray-800 outline-none focus:border-teal-500"
+          />
+          <button type="button" onClick={sendProposal} disabled={proposalName.trim().length < 2} className="rounded-lg bg-teal-600 px-3 text-white disabled:cursor-not-allowed disabled:opacity-40">
+            <Send className="h-4 w-4" />
+          </button>
+        </div>
+        {proposalSent && <p className="mt-2 flex items-center gap-1 text-xs font-semibold text-teal-700"><CheckCircle2 className="h-3.5 w-3.5" /> Propuesta enviada para revisiÃ³n.</p>}
+        {proposalError && <p className="mt-2 text-xs font-semibold text-red-600">{proposalError}</p>}
+      </div>
+    );
+  };
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-gray-500">Universidad</label>
+        <div className="relative">
+          <select
+            value={value.universityId}
+            onChange={(event) => onChange({ universityId: event.target.value, subjectId: '', chairId: '' })}
+            className="w-full appearance-none rounded-xl border-2 border-gray-200 bg-white px-4 py-3 pr-10 text-sm font-medium text-gray-800 outline-none transition-colors focus:border-teal-500"
+          >
+            <option value="">ElegÃ­ tu universidad</option>
+            {universities.map((university) => <option key={university.id} value={university.id}>{university.name}</option>)}
+          </select>
+          <ChevronDown className="pointer-events-none absolute right-3 top-3.5 h-4 w-4 text-gray-400" />
+        </div>
+        {renderProposal('university')}
+      </div>
+
+      <div>
+        <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-gray-500">Materia</label>
+        <div className="relative">
+          <select
+            value={value.subjectId}
+            disabled={!value.universityId}
+            onChange={(event) => onChange({ ...value, subjectId: event.target.value, chairId: '' })}
+            className="w-full appearance-none rounded-xl border-2 border-gray-200 bg-white px-4 py-3 pr-10 text-sm font-medium text-gray-800 outline-none transition-colors focus:border-teal-500 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
+          >
+            <option value="">ElegÃ­ una materia</option>
+            {availableSubjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.name}</option>)}
+          </select>
+          <ChevronDown className="pointer-events-none absolute right-3 top-3.5 h-4 w-4 text-gray-400" />
+        </div>
+        {renderProposal('subject')}
+      </div>
+
+      <div>
+        <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-gray-500">CÃ¡tedra</label>
+        <div className="relative">
+          <select
+            value={value.chairId}
+            disabled={!value.subjectId}
+            onChange={(event) => onChange({ ...value, chairId: event.target.value })}
+            className="w-full appearance-none rounded-xl border-2 border-gray-200 bg-white px-4 py-3 pr-10 text-sm font-medium text-gray-800 outline-none transition-colors focus:border-teal-500 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
+          >
+            <option value="">ElegÃ­ una cÃ¡tedra</option>
+            <option value="all">Todas</option>
+            {availableChairs.map((chair) => <option key={chair.id} value={chair.id}>{chair.name}</option>)}
+          </select>
+          <ChevronDown className="pointer-events-none absolute right-3 top-3.5 h-4 w-4 text-gray-400" />
+        </div>
+        {renderProposal('chair')}
+      </div>
+    </div>
+  );
+}
+--- N:\Medicina\6to\Aprobados\project-bolt-sb1-tducdbwf\project\src\lib\supabase.ts ---
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL ?? import.meta.env.SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY ?? import.meta.env.SUPABASE_ANON_KEY;
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+--- N:\Medicina\6to\Aprobados\project-bolt-sb1-tducdbwf\project\src\utils\fileParser.ts ---
+import JSZip from 'jszip';
+import * as pdfjsLib from 'pdfjs-dist';
+
+// ConfiguraciÃ³n del worker de PDF.js vÃ­a CDN compatible con Vite
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+
+// Extrae texto de PowerPoint (.pptx) leyendo el XML interno de cada diapositiva
+export async function parsePptx(buffer: ArrayBuffer): Promise<string> {
+  const zip = await JSZip.loadAsync(buffer);
+  const slideFiles: string[] = [];
+
+  zip.forEach((relativePath) => {
+    if (relativePath.startsWith('ppt/slides/slide') && relativePath.endsWith('.xml')) {
+      slideFiles.push(relativePath);
+    }
+  });
+
+  slideFiles.sort((a, b) => {
+    const numA = parseInt(a.match(/\d+/)?.[0] || '0', 10);
+    const numB = parseInt(b.match(/\d+/)?.[0] || '0', 10);
+    return numA - numB;
+  });
+
+  let fullText = '';
+  for (const slidePath of slideFiles) {
+    const xmlContent = await zip.file(slidePath)?.async('text');
+    if (xmlContent) {
+      const matches = xmlContent.match(/<a:t[^>]*>(.*?)<\/a:t>/g);
+      if (matches) {
+        const slideText = matches
+          .map((tag) => tag.replace(/<[^>]+>/g, ''))
+          .join(' ');
+        fullText += `\n--- Diapositiva ---\n${slideText}`;
+      }
+    }
+  }
+
+  return fullText.trim();
+}
+
+// Extrae texto de PDF
+export async function parsePdf(buffer: ArrayBuffer): Promise<string> {
+  const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(buffer) });
+  const pdf = await loadingTask.promise;
+  let fullText = '';
+
+  for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+    const page = await pdf.getPage(pageNum);
+    const textContent = await page.getTextContent();
+    const pageString = textContent.items
+      .map((item: any) => ('str' in item ? item.str : ''))
+      .join(' ');
+    fullText += `\n--- PÃ¡gina ${pageNum} ---\n${pageString}`;
+  }
+
+  return fullText.trim();
+}
+
+// Extrae texto directamente de un archivo local (File) seleccionado por el usuario
+export async function extractTextFromFileObject(file: File): Promise<string> {
+  const lowerName = file.name.toLowerCase();
+
+  if (file.type.includes('text/plain') || lowerName.endsWith('.txt')) {
+    return await file.text();
+  }
+
+  const arrayBuffer = await file.arrayBuffer();
+
+  if (lowerName.endsWith('.pptx') || file.type.includes('presentation')) {
+    return await parsePptx(arrayBuffer);
+  }
+
+  if (lowerName.endsWith('.pdf') || file.type.includes('pdf')) {
+    return await parsePdf(arrayBuffer);
+  }
+
+  return await file.text();
+}
+
+// Descarga un archivo por URL y extrae texto (usado en AdminPanel)
+export async function fetchAndExtractText(fileUrl: string, fileType: string): Promise<string> {
+  const response = await fetch(fileUrl);
+  if (!response.ok) throw new Error('No se pudo descargar el archivo.');
+
+  const lowerType = fileType.toLowerCase();
+  const lowerUrl = fileUrl.toLowerCase();
+
+  if (lowerType.includes('text/plain') || lowerUrl.endsWith('.txt')) {
+    return await response.text();
+  }
+
+  const arrayBuffer = await response.arrayBuffer();
+
+  if (lowerType.includes('presentation') || lowerUrl.endsWith('.pptx')) {
+    return await parsePptx(arrayBuffer);
+  }
+
+  if (lowerType.includes('pdf') || lowerUrl.endsWith('.pdf')) {
+    return await parsePdf(arrayBuffer);
+  }
+
+  return await response.text();
+}
+--- N:\Medicina\6to\Aprobados\project-bolt-sb1-tducdbwf\project\src\utils\game.ts ---
+import type { Question, ChallengeData } from '@/types';
+import defaultQuestions from '@/data/Trivia_Infectologia.json';
+import { supabase } from '@/lib/supabase';
+
+const TIME_PER_QUESTION = 25;
+export const QUESTIONS_PER_GAME = 5;
+
+export function getAllQuestions(): Question[] {
+  return defaultQuestions as Question[];
+}
+
+/**
+ * Carga preguntas dinÃ¡micamente desde Supabase segÃºn la materia o cÃ¡tedra seleccionada.
+ * Si no hay datos en Supabase para ese filtro, devolvemos [] en lugar de mezclar con
+ * un JSON local de infectologÃ­a.
+ */
+export async function loadQuestionsForGame(selection: {
+  universityId: string;
+  subjectId: string;
+  chairId: string;
+}): Promise<Question[]> {
+  try {
+    console.log('[loadQuestionsForGame] filtros de entrada:', {
+      chair_id: selection.chairId || null,
+      subject_id: selection.subjectId || null,
+      university_id: selection.universityId || null,
+    });
+
+    let questionsData: any[] = [];
+    const fieldsToSelect = 'id, question, options, correct_option, explanation, chair_id, subject, university, chair';
+
+    // 1) Si el Ã¡rbol ya trae una cÃ¡tedra exacta, consultamos sÃ³lo por ese chair_id.
+    if (selection.chairId && selection.chairId !== 'all') {
+      const { data, error } = await supabase
+        .from('questions')
+        .select(fieldsToSelect)
+        .eq('chair_id', selection.chairId);
+
+      if (error) {
+        console.error('[loadQuestionsForGame] Error al consultar Supabase por chair_id:', selection.chairId, error);
+      } else if (data && data.length > 0) {
+        questionsData = data;
+        console.log('[loadQuestionsForGame] coincidencias exactas por chair_id:', selection.chairId, data.length);
+      } else {
+        console.warn('[loadQuestionsForGame] sin coincidencias exactas por chair_id=', selection.chairId);
+      }
+    }
+
+    // 2) Si no apareciÃ³ el chair_id directo, resolve el subject_id a su nombre
+    //    y hacemos un filtro de materia estricto, con una rama exclusiva para InfectologÃ­a.
+    if (questionsData.length === 0 && selection.subjectId) {
+      const { data: subjectData, error: subjectError } = await supabase
+        .from('subjects')
+        .select('name')
+        .eq('id', selection.subjectId)
+        .maybeSingle();
+
+      if (subjectError) {
+        console.error('[loadQuestionsForGame] Error al resolver subject_id:', selection.subjectId, subjectError);
+      }
+
+      if (subjectData?.name) {
+        const subjectName = subjectData.name.trim();
+        const isInfectologia = subjectName.toLowerCase().includes('infecto');
+
+        console.log('[loadQuestionsForGame] filtro de subject:', subjectName, 'isInfectologia=', isInfectologia);
+
+        let subjectQuery = supabase
+          .from('questions')
+          .select(fieldsToSelect);
+
+        if (isInfectologia) {
+          subjectQuery = subjectQuery.ilike('subject', '%Infecto%');
+        } else {
+          subjectQuery = subjectQuery.eq('subject', subjectName);
+        }
+
+        const { data: subjectQuestions, error: subjectErrorRows } = await subjectQuery;
+
+        if (subjectErrorRows) {
+          console.error('[loadQuestionsForGame] Error al consultar Supabase por subject:', subjectName, subjectErrorRows);
+        } else if (subjectQuestions && subjectQuestions.length > 0) {
+          questionsData = subjectQuestions;
+          console.log('[loadQuestionsForGame] coincidencias de subject:', subjectName, subjectQuestions.length);
+        } else {
+          console.warn('[loadQuestionsForGame] sin coincidencias de subject=', subjectName);
+        }
+      }
+    }
+
+    console.log(`Preguntas recuperadas de Supabase (${questionsData.length}):`, questionsData);
+
+    if (questionsData.length > 0) {
+      const shuffled = [...questionsData].sort(() => Math.random() - 0.5);
+      return shuffled.slice(0, QUESTIONS_PER_GAME).map((q) => ({
+        pregunta: q.question,
+        opciones: Array.isArray(q.options)
+          ? q.options
+          : typeof q.options === 'string'
+          ? JSON.parse(q.options)
+          : [],
+        correcta: Number(q.correct_option),
+        explicacion: q.explanation || '',
+      }));
+    }
+  } catch (err) {
+    console.error('Error al cargar preguntas de Supabase:', err);
+  }
+
+  const selectionSummary = {
+    universityId: selection.universityId,
+    subjectId: selection.subjectId,
+    chairId: selection.chairId,
+  };
+  console.error('[loadQuestionsForGame] No habÃ­a preguntas en Supabase para este filtro. No se usÃ³ el fallback local de infectologÃ­a.', selectionSummary);
+
+  return [];
+}
+
+export async function loadRandomQuestionsForGame(count: number = QUESTIONS_PER_GAME): Promise<Question[]> {
+  try {
+    const fieldsToSelect = 'id, question, options, correct_option, explanation, chair_id, subject';
+    const { data, error } = await supabase
+      .from('questions')
+      .select(fieldsToSelect);
+
+    if (error) {
+      console.error('[loadRandomQuestionsForGame] Error al consultar Supabase:', error);
+      return [];
+    }
+
+    if (!data || data.length === 0) {
+      return [];
+    }
+
+    const mapped = data.map((q: any) => ({
+      pregunta: q.question,
+      opciones: Array.isArray(q.options)
+        ? q.options
+        : typeof q.options === 'string'
+        ? JSON.parse(q.options)
+        : [],
+      correcta: Number(q.correct_option),
+      explicacion: q.explanation || '',
+    }));
+
+    const shuffled = [...mapped].sort(() => Math.random() - 0.5);
+    return shuffled.slice(0, Math.min(count, mapped.length));
+  } catch (err) {
+    console.error('Error al cargar preguntas aleatorias de Supabase:', err);
+    return [];
+  }
+}
+
+export function selectRandomQuestions(count: number = QUESTIONS_PER_GAME): number[] {
+  const total = (defaultQuestions as Question[]).length;
+  const indices = Array.from({ length: total }, (_, i) => i);
+  for (let i = indices.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [indices[i], indices[j]] = [indices[j], indices[i]];
+  }
+  return indices.slice(0, Math.min(count, total));
+}
+
+export function encodeChallenge(data: ChallengeData): string {
+  return btoa(encodeURIComponent(JSON.stringify(data)));
+}
+
+export function decodeChallenge(encoded: string): ChallengeData | null {
+  try {
+    return JSON.parse(decodeURIComponent(atob(encoded)));
+  } catch {
+    return null;
+  }
+}
+
+export function calculatePoints(timeLeft: number): number {
+  const basePoints = 100;
+  const timeBonus = Math.round((timeLeft / TIME_PER_QUESTION) * 100);
+  return basePoints + timeBonus;
+}
+
+export { TIME_PER_QUESTION };
+--- N:\Medicina\6to\Aprobados\project-bolt-sb1-tducdbwf\project\src\utils\gemini.ts ---
+import type { Question } from '@/types';
+
+const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY || '';
+const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
+
+function getSystemPrompt(): string {
+  return `
+Sos un parser y docente mÃ©dico especializado en estructurar exÃ¡menes choice.
+Tu objetivo es extraer y normalizar TODAS las preguntas presentes en el material provisto, sin omitir ninguna.
+
+REGLAS CRÃTICAS:
+1. Si el material contiene casos clÃ­nicos seriados (por ejemplo, una viÃ±eta clÃ­nica comÃºn con varias preguntas derivadas 1, 2, 3...), generÃ¡ una pregunta independiente para CADA sub-pregunta.
+2. En cada una de esas preguntas, incluÃ­ en el enunciado un breve resumen o contexto del caso para que sea auto-explicativa al aparecer en el juego.
+3. ExtraÃ© absolutamente todas las preguntas (si hay 20 o 25, extraÃ© todas).
+4. 'correcta' debe ser el Ã­ndice numÃ©rico de la opciÃ³n correcta: 0 para la primera (A), 1 para la segunda (B), 2 para la tercera (C), 3 para la cuarta (D).
+5. ProporcionÃ¡ una breve justificaciÃ³n mÃ©dica en 'explicacion'.
+6. Si en el texto aparece una universidad, materia o cÃ¡tedra escrita con tildes, acentos, mayÃºsculas, abreviaturas o espacios extra, normalizÃ¡ la entidad de salida a la versiÃ³n oficial canÃ³nica y limpia (por ejemplo: 'uba', 'u.b.a' o 'Universidad de Buenos Aires' -> 'Universidad de Buenos Aires'; 'MÃ©dicina' -> 'Medicina'; 'FundaciÃ³n' -> 'Fundacion' si la forma canÃ³nica del material usa esa salida, o la versiÃ³n con acentos eliminados segÃºn la base esperada).
+
+DevolvÃ© estrictamente un JSON vÃ¡lido con este formato exacto:
+{
+  "preguntas": [
+    {
+      "pregunta": "[Caso ClÃ­nico / Contexto]: Enunciado exacto de la pregunta",
+      "opciones": ["OpciÃ³n A", "OpciÃ³n B", "OpciÃ³n C", "OpciÃ³n D"],
+      "correcta": 0,
+      "explicacion": "FundamentaciÃ³n concisa de la respuesta correcta."
+    }
+  ]
+}
+`;
+}
+
+// Llamada a Groq (rÃ¡pido y sin saturaciÃ³n)
+async function callGroq(textContent: string, prompt: string): Promise<Question[]> {
+  if (!GROQ_API_KEY) throw new Error('Sin GROQ_API_KEY');
+
+  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${GROQ_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: 'llama-3.3-70b-versatile',
+      messages: [
+        { role: 'system', content: prompt },
+        { role: 'user', content: `Texto completo del examen:\n\n${textContent}` },
+      ],
+      temperature: 0.1,
+      response_format: { type: 'json_object' },
+    }),
+  });
+
+  if (!res.ok) throw new Error(`Groq HTTP ${res.status}`);
+  const data = await res.json();
+  const parsed = JSON.parse(data.choices?.[0]?.message?.content || '{}');
+  return Array.isArray(parsed.preguntas) ? parsed.preguntas : Array.isArray(parsed.questions) ? parsed.questions : [];
+}
+
+// Llamada a Gemini con reintento ante error 503
+async function callGemini(textContent: string, prompt: string, attempt = 1): Promise<Question[]> {
+  if (!GEMINI_API_KEY) throw new Error('Sin GEMINI_API_KEY');
+
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${GEMINI_API_KEY}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              { text: prompt },
+              { text: `Texto completo del examen:\n\n${textContent}` },
+            ],
+          },
+        ],
+        generationConfig: {
+          responseMimeType: 'application/json',
+          temperature: 0.1,
+        },
+      }),
+    }
+  );
+
+  // Si Gemini estÃ¡ saturado (503), espera 3 segundos y reintenta una vez
+  if (res.status === 503 && attempt <= 2) {
+    console.warn(`[AI] Gemini 503 (servidores llenos). Reintentando en 3s (intento ${attempt})...`);
+    await new Promise((r) => setTimeout(r, 3000));
+    return callGemini(textContent, prompt, attempt + 1);
+  }
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Gemini HTTP ${res.status}: ${errText}`);
+  }
+
+  const data = await res.json();
+  const rawContent = data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+  const parsed = JSON.parse(rawContent);
+
+  return Array.isArray(parsed.preguntas) ? parsed.preguntas : Array.isArray(parsed.questions) ? parsed.questions : [];
+}
+
+export async function extractQuestionsFromFile(
+  textContent: string,
+  _onProgress?: (current: number, total: number) => void
+): Promise<{ questions: Question[]; error?: string }> {
+  try {
+    const prompt = getSystemPrompt();
+    let questions: Question[] = [];
+    let lastError = '';
+
+    // 1. Intentar primero con Groq (alta disponibilidad)
+    if (GROQ_API_KEY) {
+      try {
+        console.log('[AI] Procesando examen con Groq...');
+        questions = await callGroq(textContent, prompt);
+      } catch (err: any) {
+        console.warn('[AI] FallÃ³ Groq, derivando a Gemini:', err.message);
+        lastError = err.message;
+      }
+    }
+
+    // 2. Si Groq no estÃ¡ o fallÃ³, usar Gemini
+    if (questions.length === 0 && GEMINI_API_KEY) {
+      try {
+        console.log('[AI] Procesando examen con Gemini...');
+        questions = await callGemini(textContent, prompt);
+      } catch (err: any) {
+        console.error('[AI] FallÃ³ Gemini:', err.message);
+        lastError = err.message;
+      }
+    }
+
+    if (questions.length === 0) {
+      return {
+        questions: [],
+        error: `No se pudieron extraer preguntas. Detalle: ${lastError}`,
+      };
+    }
+
+    return { questions };
+  } catch (err: any) {
+    return { questions: [], error: err.message || 'Error inesperado al procesar el archivo.' };
+  }
+}
+--- N:\Medicina\6to\Aprobados\project-bolt-sb1-tducdbwf\project\src\utils\moderation.ts ---
+import { supabase } from '@/lib/supabase';
+import { canonicalizeTaxonomyName, normalizeString, normalizeTaxonomyText } from '@/utils/taxonomy';
+
+const COMMON_WORDS = new Set([
+  'instituto',
+  'institut',
+  'institucion',
+  'facultad',
+  'facultades',
+  'universidad',
+  'universitario',
+  'la',
+  'las',
+  'el',
+  'los',
+  'de',
+  'del',
+  'y',
+  'e',
+]);
+
+function normalizeInstitutionForComparison(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\b(instituto|institut|institucion|facultad|facultades|universidad|universitario|la|las|el|los|de|del|y|e)\b/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function formatInstitutionName(value: string): string {
+  const accentless = value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return accentless
+    .toLowerCase()
+    .split(' ')
+    .filter(Boolean)
+    .map((word) => {
+      if (word === 'de' || word === 'del' || word === 'la' || word === 'las' || word === 'el' || word === 'los') {
+        return word;
+      }
+      return word.charAt(0).toUpperCase() + word.slice(1);
+    })
+    .join(' ');
+}
+
+function similarityScore(a: string, b: string): number {
+  const left = normalizeInstitutionForComparison(a);
+  const right = normalizeInstitutionForComparison(b);
+  if (!left || !right) return 0;
+  if (left === right) return 1;
+  const leftTokens = new Set(left.split(' '));
+  const rightTokens = new Set(right.split(' '));
+  const shared = [...leftTokens].filter((token) => rightTokens.has(token)).length;
+  const union = new Set([...leftTokens, ...rightTokens]).size;
+  const base = union ? shared / union : 0;
+  if (left.includes(right) || right.includes(left)) return 0.92;
+  return Math.min(1, Math.max(0, base));
+}
+
+function findNearMatch<T extends { id: string; name: string }>(rows: T[], target: string): T | null {
+  const targetKey = normalizeInstitutionForComparison(target);
+  if (!targetKey) return null;
+
+  const scored = rows
+    .map((row) => {
+      const rowKey = normalizeInstitutionForComparison(row.name);
+      const score = similarityScore(rowKey, targetKey);
+      return { row, score };
+    })
+    .filter((entry) => entry.score >= 0.72 || entry.row.name.toLowerCase().includes(targetKey) || targetKey.includes(entry.row.name.toLowerCase()));
+
+  scored.sort((a, b) => b.score - a.score);
+  return scored.length > 0 ? scored[0].row : null;
+}
+
+export interface Submission {
+  id: string;
+  created_at: string;
+  university: string;
+  subject: string;
+  chair: string;
+  source_notes: string | null;
+  material_type: string;
+  file_url: string;
+  file_type: string;
+  processed: boolean;
+  extracted_questions?: any[];
+}
+
+export async function loadPendingSubmissions(): Promise<Submission[]> {
+  const { data, error } = await supabase
+    .from('submissions')
+    .select('id, created_at, university, subject, chair, source_notes, material_type, file_url, file_type, processed, extracted_questions')
+    .or('processed.is.null,processed.eq.false')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Error al cargar submissions:', error);
+    throw new Error('No se pudieron cargar los envÃ­os pendientes.');
+  }
+  return data ?? [];
+}
+
+function findByNormalizedName<T extends { id: string; name: string }>(rows: T[], target: string) {
+  const targetKey = normalizeString(target);
+  return rows.find((row) => normalizeString(row.name) === targetKey) ?? null;
+}
+
+/**
+ * Asegura la existencia de Universidad, Materia y CÃ¡tedra devolviendo sus UUIDs.
+ */
+export async function ensureTaxonomyFromSubmission(
+  submission: {
+    university: string;
+    subject: string;
+    chair: string;
+  },
+  adminPassword?: string
+): Promise<{ universityId: string; subjectId: string; chairId: string }> {
+  const uniName = canonicalizeTaxonomyName('university', submission.university);
+  const subjName = canonicalizeTaxonomyName('subject', submission.subject);
+  const chairName = canonicalizeTaxonomyName('chair', submission.chair);
+
+  // 1. Intentar resolver vÃ­a RPC si la funciÃ³n de base existe
+  if (adminPassword) {
+    try {
+      const { data, error } = await supabase.rpc('admin_ensure_taxonomy', {
+        p_university: uniName,
+        p_subject: subjName,
+        p_chair: chairName,
+        p_admin_password: adminPassword,
+      });
+
+      if (!error && data) {
+        return {
+          universityId: data.university_id || data.universityId,
+          subjectId: data.subject_id || data.subjectId,
+          chairId: data.chair_id || data.chairId,
+        };
+      }
+    } catch {
+      // Si el RPC falla o no coincide la firma, continÃºa al fallback nativo
+    }
+  }
+
+  // 2. Fallback nativo directo con limpieza y bÃºsqueda normalizada para evitar duplicados.
+  const { data: universities } = await supabase.from('universities').select('id, name');
+  const { data: subjects } = await supabase.from('subjects').select('id, university_id, name');
+  const { data: chairs } = await supabase.from('chairs').select('id, subject_id, name');
+
+  const universityRows = universities ?? [];
+  const subjectRows = subjects ?? [];
+  const chairRows = chairs ?? [];
+
+  let uni = findNearMatch(universityRows, uniName) ?? findByNormalizedName(universityRows, uniName);
+  if (!uni) {
+    const polishedUni = formatInstitutionName(canonicalizeTaxonomyName('university', uniName));
+    const { data: newUni, error: errUni } = await supabase
+      .from('universities')
+      .insert({ name: polishedUni })
+      .select('id, name')
+      .single();
+    if (errUni) throw new Error('No se pudo registrar la universidad: ' + errUni.message);
+    uni = newUni;
+  }
+
+  let subj = (subjectRows ?? []).find((row) => row.university_id === uni!.id && normalizeString(row.name) === normalizeString(subjName))
+    ?? findNearMatch((subjectRows ?? []).filter((row) => row.university_id === uni!.id && row.name), subjName)
+    ?? null;
+
+  if (!subj) {
+    const polishedSubject = formatInstitutionName(canonicalizeTaxonomyName('subject', subjName));
+    const { data: newSubj, error: errSubj } = await supabase
+      .from('subjects')
+      .insert({ university_id: uni!.id, name: polishedSubject })
+      .select('id, university_id, name')
+      .single();
+    if (errSubj) throw new Error('No se pudo registrar la materia: ' + errSubj.message);
+    subj = newSubj;
+  }
+
+  let ch = (chairRows ?? []).find((row) => row.subject_id === subj!.id && normalizeString(row.name) === normalizeString(chairName))
+    ?? findNearMatch((chairRows ?? []).filter((row) => row.subject_id === subj!.id && row.name), chairName)
+    ?? null;
+
+  if (!ch) {
+    const polishedChair = formatInstitutionName(canonicalizeTaxonomyName('chair', chairName));
+    const { data: newCh, error: errCh } = await supabase
+      .from('chairs')
+      .insert({ subject_id: subj!.id, name: polishedChair })
+      .select('id, subject_id, name')
+      .single();
+    if (errCh) throw new Error('No se pudo registrar la cÃ¡tedra: ' + errCh.message);
+    ch = newCh;
+  }
+
+  return {
+    universityId: uni!.id,
+    subjectId: subj!.id,
+    chairId: ch!.id,
+  };
+}
+
+/**
+ * Inserta una pregunta individual aprobada en la tabla questions.
+ */
+export async function insertQuestion(
+  pregunta: string,
+  opciones: string[],
+  correcta: number,
+  explicacion: string,
+  submissionId: string,
+  adminPassword?: string,
+  chairId?: string,
+  metadata?: { university?: string; subject?: string; chair?: string }
+): Promise<string> {
+  void adminPassword;
+
+  const { data, error } = await supabase
+    .from('questions')
+    .insert({
+      question: pregunta,
+      options: Array.isArray(opciones) ? opciones : [],
+      correct_option: Number.isInteger(Number(correcta)) ? Number(correcta) : 0,
+      explanation: explicacion || '',
+      submission_id: submissionId || null,
+      chair_id: chairId || null,
+      university: metadata?.university || null,
+      subject: metadata?.subject || null,
+      chair: metadata?.chair || null,
+      difficulty: 'media',
+      active: true,
+    })
+    .select('id')
+    .single();
+
+  if (error) {
+    console.error('Error insertando pregunta en questions:', error);
+    throw new Error('No se pudo guardar la pregunta: ' + error.message);
+  }
+
+  return data.id;
+}
+
+/**
+ * Marca el material colaborativo como procesado.
+ */
+export async function markSubmissionProcessed(
+  submissionId: string,
+  adminPassword?: string
+): Promise<void> {
+  const { error: updErr } = await supabase
+    .from('submissions')
+    .update({ processed: true })
+    .eq('id', submissionId);
+
+  if (updErr && adminPassword) {
+    const { error: rpcErr } = await supabase.rpc('admin_mark_submission_processed', {
+      p_submission_id: submissionId,
+      p_admin_password: adminPassword,
+    });
+    if (rpcErr) throw new Error('No se pudo marcar el envÃ­o como completado.');
+  }
+}
+
+/**
+ * Inserta todas las preguntas de un lote en una Ãºnica operaciÃ³n atÃ³mica (Bulk Insert).
+ */
+export async function insertBatchQuestions(
+  questions: Array<{
+    pregunta: string;
+    opciones: string[];
+    correcta: number;
+    explicacion: string;
+  }>,
+  submissionId: string,
+  chairId: string,
+  metadata?: { university?: string; subject?: string; chair?: string }
+): Promise<void> {
+  const rows = questions.map((q) => {
+    const opts = Array.isArray(q.opciones) ? q.opciones : [];
+    const corr = Number.isInteger(Number(q.correcta)) ? Number(q.correcta) : 0;
+
+    return {
+      submission_id: submissionId || null,
+      chair_id: chairId || null,
+      university: metadata?.university || null,
+      subject: metadata?.subject || null,
+      chair: metadata?.chair || null,
+      question: q.pregunta || '',
+      options: opts,
+      correct_option: corr,
+      explanation: q.explicacion || '',
+      difficulty: 'media',
+      active: true,
+    };
+  });
+
+  const { error } = await supabase.from('questions').insert(rows);
+
+  if (error) {
+    console.error('Error en bulk insert de questions:', error);
+    alert('Error al guardar el lote en Supabase: ' + error.message);
+    throw new Error('Error al guardar el lote de preguntas: ' + error.message);
+  }
+}
+
+export async function approveBatchQuestions(
+  questions: Array<{
+    pregunta: string;
+    opciones: string[];
+    correcta: number;
+    explicacion: string;
+  }>,
+  submissionId: string,
+  adminPassword: string,
+  chairId?: string,
+  metadata?: { university?: string; subject?: string; chair?: string }
+): Promise<number> {
+  await insertBatchQuestions(questions, submissionId, chairId || '', metadata);
+  await markSubmissionProcessed(submissionId, adminPassword);
+  return questions.length;
+}
+--- N:\Medicina\6to\Aprobados\project-bolt-sb1-tducdbwf\project\src\utils\notifications.ts ---
+import { supabase } from '@/lib/supabase';
+
+export const NOTIFICATION_SESSION_KEY = 'aprobados-session-id';
+
+export function getOrCreateSessionId() {
+  const stored = localStorage.getItem(NOTIFICATION_SESSION_KEY);
+  if (stored) return stored;
+
+  const newSession = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  localStorage.setItem(NOTIFICATION_SESSION_KEY, newSession);
+  return newSession;
+}
+
+export function notificationSupported() {
+  return 'Notification' in window && 'serviceWorker' in navigator && 'PushManager' in window;
+}
+
+export async function requestNotificationPermission(): Promise<NotificationPermission | 'unsupported'> {
+  if (!notificationSupported()) {
+    return 'unsupported';
+  }
+
+  if (Notification.permission === 'granted') {
+    return 'granted';
+  }
+
+  return Notification.requestPermission();
+}
+
+function urlBase64ToUint8Array(base64String: string) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = atob(base64);
+  return Uint8Array.from(rawData, (char) => char.charCodeAt(0));
+}
+
+function arrayBufferToBase64(buffer: ArrayBuffer | Uint8Array | null) {
+  if (!buffer) return null;
+  const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+}
+
+export async function registerBrowserPushSubscription(sessionId = getOrCreateSessionId()) {
+  if (!notificationSupported() || Notification.permission !== 'granted') {
+    throw new Error('Las notificaciones push no estÃ¡n autorizadas en este navegador.');
+  }
+
+  if (!('serviceWorker' in navigator)) {
+    throw new Error('El navegador no soporta service workers para notificaciones web.');
+  }
+
+  try {
+    await navigator.serviceWorker.ready;
+    const registration = await navigator.serviceWorker.getRegistration('/sw.js');
+    const activeRegistration = registration ?? await navigator.serviceWorker.register('/sw.js');
+
+    const publicKey = import.meta.env.VITE_VAPID_PUBLIC_KEY ?? import.meta.env.VAPID_PUBLIC_KEY ?? '';
+    if (!publicKey) {
+      throw new Error('No hay una clave VAPID pÃºblica configurada.');
+    }
+
+    const subscription = await activeRegistration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(publicKey),
+    });
+
+    const rawKeys = subscription.getKey('p256dh');
+    const rawAuth = subscription.getKey('auth');
+
+    const payload = {
+      session_id: sessionId,
+      endpoint: subscription.endpoint,
+      p256dh: arrayBufferToBase64(rawKeys),
+      auth: arrayBufferToBase64(rawAuth),
+      updated_at: new Date().toISOString(),
+    };
+
+    await supabase
+      .from('user_subscriptions')
+      .upsert(payload, { onConflict: 'endpoint' });
+
+    return payload;
+  } catch (error) {
+    console.error('No se pudo registrar la subscripciÃ³n push.', error);
+    throw error;
+  }
+}
+
+export async function sendApprovedSubmissionPushNotification(args: {
+  subject: string;
+  chair: string;
+  sessionId?: string | null;
+}) {
+  try {
+    const { data, error } = await supabase.functions.invoke('notify-approved-submission', {
+      body: {
+        subject: args.subject,
+        chair: args.chair,
+        session_id: args.sessionId ?? null,
+        message: `Â¡Listo tu preguntero de ${args.chair}! Ya estÃ¡ disponible para jugar y rankear. ðŸŽ“`,
+      },
+    });
+
+    if (error) {
+      console.error('No se pudo disparar la notificaciÃ³n push desde Supabase:', error);
+    }
+
+    return { data, error };
+  } catch (error) {
+    console.error('No se pudo disparar la notificaciÃ³n push localmente:', error);
+    return { data: null, error };
+  }
+}
+--- N:\Medicina\6to\Aprobados\project-bolt-sb1-tducdbwf\project\src\utils\rankings.ts ---
+import { supabase } from '@/lib/supabase';
+
+export interface RankingEntry {
+  id?: string;
+  chair_id?: string;
+  player_name: string;
+  score: number;
+  created_at?: string;
+  chairName?: string;
+  subjectName?: string;
+  universityName?: string;
+}
+
+export interface GlobalRankingEntry extends RankingEntry {
+  chairName: string;
+  subjectName: string;
+  universityName: string;
+}
+
+interface RankingJoinRow {
+  id?: string;
+  chair_id?: string;
+  player_name: string;
+  score: number;
+  created_at?: string;
+  chairs?: {
+    name?: string | null;
+    subject_id?: string | null;
+    subjects?: {
+      name?: string | null;
+      university_id?: string | null;
+      universities?: {
+        name?: string | null;
+      } | null;
+    } | null;
+  } | null;
+}
+
+function mapJoinRow(row: RankingJoinRow): GlobalRankingEntry {
+  const chairName = row.chairs?.name ?? 'CÃ¡tedra sin nombre';
+  const subjectName = row.chairs?.subjects?.name ?? 'Materia sin nombre';
+  const universityName = row.chairs?.subjects?.universities?.name ?? 'Universidad sin nombre';
+
+  return {
+    id: row.id,
+    chair_id: row.chair_id,
+    player_name: row.player_name,
+    score: row.score,
+    created_at: row.created_at,
+    chairName,
+    subjectName,
+    universityName,
+  } as GlobalRankingEntry;
+}
+
+export interface RankingSaveResult {
+  position: number;
+  total: number;
+}
+
+export async function saveRankingScore({
+  chairId,
+  playerName,
+  score,
+}: {
+  chairId: string;
+  playerName: string;
+  score: number;
+}): Promise<RankingSaveResult> {
+  const chairCheck = await supabase
+    .from('chairs')
+    .select('id')
+    .eq('id', chairId)
+    .maybeSingle();
+
+  if (chairCheck.error) {
+    console.error('Error validando cÃ¡tedra para rankings:', chairCheck.error);
+    throw chairCheck.error;
+  }
+
+  if (!chairCheck.data) {
+    throw new Error('La cÃ¡tedra seleccionada aÃºn no existe en el ranking.');
+  }
+
+  const payload = {
+    chair_id: chairId,
+    player_name: playerName.trim().slice(0, 50) || 'AnÃ³nimo',
+    score,
+    created_at: new Date().toISOString(),
+  };
+
+  const { data, error } = await supabase.from('rankings').insert(payload).select('id').single();
+
+  if (error) {
+    console.error('Error guardando puntaje en rankings:', error);
+    throw error;
+  }
+
+  const rows = await loadRankingEntries(chairId);
+  const withNewRow = [...rows, { id: data?.id ?? '', chair_id: chairId, player_name: payload.player_name, score, created_at: payload.created_at }];
+  const ordered = withNewRow.sort((a, b) => b.score - a.score);
+  const position = ordered.findIndex((row) => row.id === data?.id) + 1;
+
+  return {
+    position,
+    total: ordered.length,
+  };
+}
+
+export async function loadRankingEntries(chairId: string): Promise<RankingEntry[]> {
+  const { data, error } = await supabase
+    .from('rankings')
+    .select('id, chair_id, player_name, score, created_at')
+    .eq('chair_id', chairId)
+    .order('score', { ascending: false });
+
+  if (error) {
+    console.error('Error cargando ranking:', error);
+    throw error;
+  }
+
+  return (data ?? []) as RankingEntry[];
+}
+
+export async function loadRankingTopTen(chairId: string): Promise<GlobalRankingEntry[]> {
+  const { data, error } = await supabase
+    .from('rankings')
+    .select(`id, chair_id, player_name, score, created_at, chairs(name, subject_id, subjects(name, university_id, universities(name)))`)
+    .eq('chair_id', chairId)
+    .order('score', { ascending: false })
+    .limit(10);
+
+  if (error) {
+    console.error('Error cargando ranking:', error);
+    throw error;
+  }
+
+  return ((data ?? []) as RankingJoinRow[]).map(mapJoinRow);
+}
+
+export async function loadGlobalRankingTopTen(): Promise<GlobalRankingEntry[]> {
+  const { data, error } = await supabase
+    .from('rankings')
+    .select(`id, chair_id, player_name, score, created_at, chairs(name, subject_id, subjects(name, university_id, universities(name)))`)
+    .order('score', { ascending: false })
+    .limit(50);
+
+  if (error) {
+    console.error('Error cargando ranking global:', error);
+    throw error;
+  }
+
+  return ((data ?? []) as RankingJoinRow[]).map(mapJoinRow);
+}
+--- N:\Medicina\6to\Aprobados\project-bolt-sb1-tducdbwf\project\src\utils\submissions.ts ---
+import { supabase } from '@/lib/supabase';
+import { extractTextFromFileObject } from '@/utils/fileParser';
+
+export type MaterialType = 'apunte' | 'preguntero_choice' | 'pregunta_respuesta';
+
+export interface SubmissionInput {
+  university: string;
+  subject: string;
+  chair: string;
+  sourceNotes?: string;
+  materialType: MaterialType;
+  file: File;
+  onProgress?: (percent: number) => void;
+}
+
+// LÃ­mite en el modal: permite seleccionar archivos de hasta 150 MB
+const MAX_FILE_SIZE = 150 * 1024 * 1024;
+
+// Umbral de Supabase (45 MB de seguridad para no chocar con los 50 MB)
+const SUPABASE_SIZE_LIMIT = 45 * 1024 * 1024;
+
+const ALLOWED_MIME_TYPES = [
+  'application/pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'image/png',
+  'image/jpeg',
+  'image/jpg',
+  'text/plain',
+];
+
+const ALLOWED_EXTENSIONS = ['.pdf', '.docx', '.pptx', '.png', '.jpg', '.jpeg', '.txt'];
+
+export function validateFile(file: File): string | null {
+  if (file.size > MAX_FILE_SIZE) {
+    return 'El archivo supera el tamaÃ±o mÃ¡ximo permitido de 150 MB.';
+  }
+
+  const extension = '.' + file.name.split('.').pop()?.toLowerCase();
+  const isValidType =
+    ALLOWED_MIME_TYPES.includes(file.type) ||
+    ALLOWED_EXTENSIONS.includes(extension);
+
+  if (!isValidType) {
+    return 'Formato no soportado. SubÃ­ un archivo PDF, PPTX, DOCX, TXT o imagen.';
+  }
+
+  return null;
+}
+
+export async function uploadSubmission(input: SubmissionInput): Promise<void> {
+  let fileToUpload: File | Blob = input.file;
+  let fileType = input.file.type;
+  let fileExt = input.file.name.split('.').pop()?.toLowerCase() || 'dat';
+
+  // Si el archivo supera los 45 MB, extraemos el texto en el cliente para no exceder Supabase
+  if (input.file.size > SUPABASE_SIZE_LIMIT) {
+    try {
+      const extractedText = await extractTextFromFileObject(input.file);
+      if (!extractedText || extractedText.trim().length < 20) {
+        throw new Error('El archivo supera los 50 MB y no tiene texto legible (puede ser un escaneo de solo imÃ¡genes).');
+      }
+
+      // Convertimos el texto plano a un archivo .txt liviano
+      fileToUpload = new Blob([extractedText], { type: 'text/plain;charset=utf-8' });
+      fileType = 'text/plain';
+      fileExt = 'txt';
+    } catch (err: any) {
+      throw new Error(err.message || 'Error al procesar el archivo pesado.');
+    }
+  }
+
+  const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
+  const filePath = `submissions/${fileName}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from('study-materials')
+    .upload(filePath, fileToUpload, {
+      cacheControl: '3600',
+      upsert: false,
+    });
+
+  if (uploadError) {
+    console.error('Detalle error Supabase Storage:', uploadError);
+    throw new Error(`Error de subida: ${uploadError.message}`);
+  }
+
+  const { data: urlData } = supabase.storage.from('study-materials').getPublicUrl(filePath);
+  const fileUrl = urlData.publicUrl;
+
+  const { error: insertError } = await supabase.from('submissions').insert({
+    university: input.university.trim(),
+    subject: input.subject.trim(),
+    chair: input.chair.trim(),
+    source_notes: input.sourceNotes?.trim() || null,
+    material_type: input.materialType,
+    file_url: fileUrl,
+    file_type: fileType || `application/${fileExt}`,
+    processed: false,
+  });
+
+  if (insertError) {
+    console.error('Detalle error base de datos:', insertError);
+    throw new Error('No se pudo registrar el envÃ­o en la base de datos.');
+  }
+}export async function deleteSubmission(submissionId: string, fileUrl: string): Promise<void> {
+  // 1. Extraer el path relativo dentro del bucket para borrar el archivo fÃ­sico
+  try {
+    const url = new URL(fileUrl);
+    const pathParts = url.pathname.split('study-materials/');
+    if (pathParts.length > 1) {
+      const storagePath = decodeURIComponent(pathParts[1]);
+      await supabase.storage.from('study-materials').remove([storagePath]);
+    }
+  } catch (storageErr) {
+    console.warn('No se pudo borrar el archivo fÃ­sico de Storage:', storageErr);
+  }
+
+  // 2. Borrar la fila de la tabla submissions
+  const { error: dbError } = await supabase
+    .from('submissions')
+    .delete()
+    .eq('id', submissionId);
+
+  if (dbError) {
+    console.error('Error al eliminar el registro:', dbError);
+    throw new Error('No se pudo eliminar el envÃ­o de la base de datos.');
+  }
+}
+--- N:\Medicina\6to\Aprobados\project-bolt-sb1-tducdbwf\project\src\utils\taxonomy.ts ---
+import { supabase } from '@/lib/supabase';
+import type { Chair, Subject, TaxonomySuggestion, University } from '@/types';
+
+export function normalizeString(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[\-_. ,]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function stripInstitutionSuffix(value: string): string {
+  return value.replace(/\s*[-â€“â€”]\s*[^-â€“â€”]+$/i, '').trim();
+}
+
+function cleanUniversityNameForKey(value: string): string {
+  const trimmed = stripInstitutionSuffix(value);
+  return normalizeString(trimmed.replace(/\b(instituto|institut|institucion|facultad|facultades|universidad|universitario|la|las|el|los|de|del|y|e)\b/gi, ''));
+}
+
+function cleanSubjectNameForKey(value: string): string {
+  return normalizeString(stripInstitutionSuffix(value));
+}
+
+const UNIVERSITY_ALIAS_MAP: Record<string, string> = {
+  'uba': 'Universidad de Buenos Aires',
+  'u b a': 'Universidad de Buenos Aires',
+  'u.b.a': 'Universidad de Buenos Aires',
+  'u b a universidad de buenos aires': 'Universidad de Buenos Aires',
+  'universidad de buenos aires': 'Universidad de Buenos Aires',
+  'universidad nacional de buenos aires': 'Universidad de Buenos Aires',
+  'universidad de buenos aires uba': 'Universidad de Buenos Aires',
+  'instituto fundacion barcelo': 'FundaciÃ³n BarcelÃ³',
+  'instituto universitario fundacion barcelo': 'FundaciÃ³n BarcelÃ³',
+  'instituto universitario fundacion barcelo universidad': 'FundaciÃ³n BarcelÃ³',
+  'fundacion barcelo': 'FundaciÃ³n BarcelÃ³',
+  'barcelo': 'FundaciÃ³n BarcelÃ³',
+};
+
+const SUBJECT_ALIAS_MAP: Record<string, string> = {
+  'infectologia': 'InfectologÃ­a',
+  'infectologia medica': 'InfectologÃ­a',
+  'infectologia medicina': 'InfectologÃ­a',
+};
+
+const CHAIR_ALIAS_MAP: Record<string, string> = {
+  'cat unica': 'CÃ¡tedra Ãšnica',
+  'catedra unica': 'CÃ¡tedra Ãšnica',
+};
+
+export function normalizeTaxonomyText(value: string): string {
+  return normalizeString(value).replace(/[\.\-,_]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+export function canonicalizeUniversityName(value: string): string {
+  const stripped = stripInstitutionSuffix(value);
+  const normalized = normalizeTaxonomyText(stripped);
+
+  if (normalized.includes('barcelo')) {
+    return 'FundaciÃ³n BarcelÃ³';
+  }
+
+  const canonical = UNIVERSITY_ALIAS_MAP[normalized]
+    ?? UNIVERSITY_ALIAS_MAP[normalized.replace(/\s+/g, ' ')]
+    ?? null;
+
+  if (canonical) return canonical;
+
+  return stripped.trim().replace(/\s+/g, ' ');
+}
+
+export function canonicalizeTaxonomyName(level: 'university' | 'subject' | 'chair', value: string): string {
+  const normalized = normalizeTaxonomyText(value);
+
+  if (level === 'university') {
+    const canonical = UNIVERSITY_ALIAS_MAP[normalized]
+      ?? UNIVERSITY_ALIAS_MAP[normalized.replace(/\s+/g, ' ')]
+      ?? (normalized.includes('barcelo') ? 'FundaciÃ³n BarcelÃ³' : null);
+
+    if (canonical) return canonical;
+    return value.trim().replace(/\s+/g, ' ');
+  }
+
+  if (level === 'subject') {
+    const canonical = SUBJECT_ALIAS_MAP[normalized] ?? null;
+    if (canonical) return canonical;
+    return value.trim().replace(/\s+/g, ' ');
+  }
+
+  const canonical = CHAIR_ALIAS_MAP[normalized] ?? null;
+  if (canonical) return canonical;
+  return value.trim().replace(/\s+/g, ' ');
+}
+
+export function taxonomicKey(value: string): string {
+  return normalizeTaxonomyText(value);
+}
+
+export async function loadTaxonomy(): Promise<{
+  universities: University[];
+  subjects: Subject[];
+  chairs: Chair[];
+}> {
+  const [universitiesResult, subjectsResult, chairsResult] = await Promise.all([
+    supabase.from('universities').select('id, name').order('name'),
+    supabase.from('subjects').select('id, university_id, name').order('name'),
+    supabase.from('chairs').select('id, subject_id, name').order('name'),
+  ]);
+
+  if (universitiesResult.error || subjectsResult.error || chairsResult.error) {
+    throw new Error('No se pudo cargar la clasificaciÃ³n.');
+  }
+
+  const universitiesRaw = universitiesResult.data ?? [];
+  const subjectsRaw = subjectsResult.data ?? [];
+  const chairsRaw = chairsResult.data ?? [];
+
+  const universityMap = new Map<string, University>();
+  const universityIdToCanonicalId = new Map<string, string>();
+
+  for (const row of universitiesRaw) {
+    const canonicalName = canonicalizeUniversityName(row.name);
+    const normalizedKey = normalizeString(canonicalName);
+    const existing = universityMap.get(normalizedKey);
+
+    if (!existing) {
+      universityMap.set(normalizedKey, {
+        id: row.id,
+        name: canonicalName,
+      });
+      universityIdToCanonicalId.set(row.id, row.id);
+      continue;
+    }
+
+    universityIdToCanonicalId.set(row.id, existing.id);
+  }
+
+  const universities = Array.from(universityMap.values());
+
+  const subjectMap = new Map<string, Subject>();
+  const subjectIdToCanonicalId = new Map<string, string>();
+
+  for (const row of subjectsRaw) {
+    const canonicalUniversityId = universityIdToCanonicalId.get(row.university_id) ?? row.university_id;
+    const canonicalName = canonicalizeTaxonomyName('subject', row.name);
+    const normalizedKey = `${normalizeString(canonicalUniversityId)}|${normalizeString(canonicalName)}`;
+    const existing = subjectMap.get(normalizedKey);
+
+    if (!existing) {
+      subjectMap.set(normalizedKey, {
+        id: row.id,
+        university_id: canonicalUniversityId,
+        name: canonicalName,
+      });
+      subjectIdToCanonicalId.set(row.id, row.id);
+      continue;
+    }
+
+    subjectIdToCanonicalId.set(row.id, existing.id);
+  }
+
+  const subjects = Array.from(subjectMap.values());
+
+  const chairMap = new Map<string, Chair>();
+  for (const row of chairsRaw) {
+    const canonicalSubjectId = subjectIdToCanonicalId.get(row.subject_id) ?? row.subject_id;
+    const canonicalName = canonicalizeTaxonomyName('chair', row.name);
+    const normalizedKey = `${normalizeString(canonicalSubjectId)}|${normalizeString(canonicalName)}`;
+    if (!chairMap.has(normalizedKey)) {
+      chairMap.set(normalizedKey, {
+        id: row.id,
+        subject_id: canonicalSubjectId,
+        name: canonicalName,
+      });
+    }
+  }
+
+  const chairs = Array.from(chairMap.values());
+
+  return {
+    universities,
+    subjects,
+    chairs,
+  };
+}
+
+export async function submitSuggestion(input: {
+  level: 'university' | 'subject' | 'chair';
+  proposedName: string;
+  universityId?: string;
+  subjectId?: string;
+}) {
+  const cleaned = canonicalizeTaxonomyName(input.level, input.proposedName);
+  const { error } = await supabase.from('taxonomy_suggestions').insert({
+    level: input.level,
+    proposed_name: cleaned,
+    university_id: input.universityId ?? null,
+    subject_id: input.subjectId ?? null,
+  });
+
+  if (error) throw new Error('No se pudo enviar la propuesta.');
+}
+
+export async function loadSuggestions(adminPassword: string): Promise<TaxonomySuggestion[]> {
+  const { data, error } = await supabase.rpc('admin_list_taxonomy_suggestions', {
+    p_admin_password: adminPassword,
+  });
+
+  if (error) throw new Error('No se pudieron cargar las propuestas.');
+  return data ?? [];
+}
+
+export async function moderateSuggestion(
+  id: string,
+  action: 'approve' | 'reject',
+  adminPassword: string,
+  name?: string,
+) {
+  const { error } = await supabase.rpc('admin_moderate_taxonomy_suggestion', {
+    p_suggestion: id,
+    p_action: action,
+    p_name: name?.trim() || null,
+    p_admin_password: adminPassword,
+  });
+
+  if (error) throw new Error('No se pudo moderar la propuesta.');
+}
+--- N:\Medicina\6to\Aprobados\project-bolt-sb1-tducdbwf\project\src\App.tsx ---
+import { useState, useEffect, useCallback } from 'react';
+import { StartScreen } from '@/components/StartScreen';
+import { GameScreen } from '@/components/GameScreen';
+import { ResultsScreen } from '@/components/ResultsScreen';
+import { AdminPanel } from '@/components/AdminPanel';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { supabase } from '@/lib/supabase';
+import { loadTaxonomy } from '@/utils/taxonomy';
+import { selectRandomQuestions, decodeChallenge, loadQuestionsForGame, loadRandomQuestionsForGame } from '@/utils/game';
+import type { AnswerRecord, Chair, ChallengeData, Question, Subject, University } from '@/types';
+import type { TaxonomySelection } from '@/components/TaxonomyPicker';
+
+type Screen = 'start' | 'game' | 'results' | 'admin';
+
+function App() {
+  const [screen, setScreen] = useState<Screen>('start');
+  const [playerName, setPlayerName] = useState('');
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [questionIndices, setQuestionIndices] = useState<number[]>([]);
+  const [answers, setAnswers] = useState<AnswerRecord[]>([]);
+  const [challengeData, setChallengeData] = useState<ChallengeData | null>(null);
+  const [currentSelection, setCurrentSelection] = useState<TaxonomySelection | null>(null);
+
+  const [universities, setUniversities] = useState<University[]>([]);
+  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [chairs, setChairs] = useState<Chair[]>([]);
+  const [totalQuestions, setTotalQuestions] = useState(0);
+  const [taxonomyError, setTaxonomyError] = useState('');
+  const [questionsLoadError, setQuestionsLoadError] = useState('');
+
+  const fetchQuestionCount = useCallback(async () => {
+    const { count, error } = await supabase
+      .from('questions')
+      .select('id', { count: 'exact', head: true })
+      .eq('active', true);
+
+    if (error) {
+      console.error('No se pudo leer el total de preguntas:', error);
+      setTotalQuestions(0);
+      return;
+    }
+
+    setTotalQuestions(count ?? 0);
+  }, []);
+
+  const fetchTaxonomy = useCallback(() => {
+    return loadTaxonomy()
+      .then((taxonomy) => {
+        setUniversities(taxonomy.universities);
+        setSubjects(taxonomy.subjects);
+        setChairs(taxonomy.chairs);
+      })
+      .catch(() =>
+        setTaxonomyError('La clasificaciÃ³n todavÃ­a no estÃ¡ disponible. PodÃ©s proponer nombres nuevos.')
+      );
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const c = params.get('c');
+    if (c) {
+      const decoded = decodeChallenge(c);
+      if (decoded) setChallengeData(decoded);
+    }
+    void fetchTaxonomy();
+    void fetchQuestionCount();
+  }, [fetchTaxonomy, fetchQuestionCount]);
+
+  const handleStart = async (name: string, selection: TaxonomySelection) => {
+    setPlayerName(name);
+    setCurrentSelection(selection);
+    setQuestionsLoadError('');
+
+    if (challengeData) {
+      setQuestionIndices(challengeData.q);
+      setQuestions([]);
+      setScreen('game');
+      return;
+    }
+
+    // Cargar preguntas de Supabase segÃºn la materia y cÃ¡tedra seleccionada.
+    const loadedQuestions = await loadQuestionsForGame(selection);
+
+    if (loadedQuestions.length === 0) {
+      setQuestions([]);
+      setQuestionIndices([]);
+      setQuestionsLoadError('PrÃ³ximamente preguntas para esta cÃ¡tedra');
+      setScreen('start');
+      return;
+    }
+
+    setQuestions(loadedQuestions);
+    setQuestionIndices(loadedQuestions.map((_, i) => i));
+    setScreen('game');
+  };
+
+  const handleQuickGame = async (name: string) => {
+    setPlayerName(name);
+    setCurrentSelection(null);
+    setQuestionsLoadError('');
+
+    const loadedQuestions = await loadRandomQuestionsForGame();
+    if (loadedQuestions.length === 0) {
+      setQuestions([]);
+      setQuestionIndices([]);
+      setQuestionsLoadError('No hay preguntas disponibles en la base de datos.');
+      setScreen('start');
+      return;
+    }
+
+    setQuestions(loadedQuestions);
+    setQuestionIndices(loadedQuestions.map((_, i) => i));
+    setScreen('game');
+  };
+
+  const handleFinish = (gameAnswers: AnswerRecord[]) => {
+    setAnswers(gameAnswers);
+    setScreen('results');
+  };
+
+  const handlePlayAgain = async () => {
+    setAnswers([]);
+    setChallengeData(null);
+    if (currentSelection) {
+      const loadedQuestions = await loadQuestionsForGame(currentSelection);
+      setQuestions(loadedQuestions);
+      setQuestionIndices(loadedQuestions.map((_, i) => i));
+    } else {
+      setQuestionIndices(selectRandomQuestions(5));
+      setQuestions([]);
+    }
+    setScreen('game');
+  };
+
+  const handleBackToHome = () => {
+    setAnswers([]);
+    setQuestionIndices([]);
+    setQuestions([]);
+    setQuestionsLoadError('');
+    setChallengeData(null);
+    setPlayerName('');
+    window.history.replaceState({}, '', window.location.pathname);
+    void fetchTaxonomy();
+    setScreen('start');
+  };
+
+  return (
+    <ErrorBoundary>
+      {screen === 'start' && (
+        <StartScreen
+          onStart={handleStart}
+          onQuickGame={handleQuickGame}
+          challengeData={challengeData}
+          universities={universities}
+          subjects={subjects}
+          chairs={chairs}
+          taxonomyError={taxonomyError}
+          totalQuestions={totalQuestions}
+          onOpenAdmin={() => setScreen('admin')}
+          questionsLoadError={questionsLoadError}
+        />
+      )}
+      {screen === 'game' && (
+        <GameScreen
+          questions={questions.length > 0 ? questions : undefined}
+          questionIndices={questionIndices}
+          onFinish={handleFinish}
+        />
+      )}
+      {screen === 'results' && (
+        <ResultsScreen
+          answers={answers}
+          questionIndices={questionIndices}
+          playerName={playerName}
+          challengeData={challengeData}
+          selection={currentSelection}
+          universities={universities}
+          subjects={subjects}
+          chairs={chairs}
+          onRestart={handlePlayAgain}
+          onHome={handleBackToHome}
+          onTaxonomyRefresh={fetchTaxonomy}
+        />
+      )}
+      {screen === 'admin' && (
+        <AdminPanel
+          onBack={() => {
+            void fetchTaxonomy();
+            void fetchQuestionCount();
+            setScreen('start');
+          }}
+        />
+      )}
+    </ErrorBoundary>
+  );
+}
+
+export default App;
+--- N:\Medicina\6to\Aprobados\project-bolt-sb1-tducdbwf\project\src\main.tsx ---
+import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
+import App from './App.tsx';
+import './index.css';
+
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <App />
+  </StrictMode>
+);
+--- N:\Medicina\6to\Aprobados\project-bolt-sb1-tducdbwf\project\src\types.ts ---
+export interface Question {
+  pregunta: string;
+  opciones: string[];
+  correcta: number;
+  explicacion: string;
+}
+
+export interface ChallengeData {
+  q: number[];
+  n: string;
+  s: number;
+}
+
+export interface AnswerRecord {
+  questionIndex: number;
+  questionText: string;
+  questionOptions: string[];
+  selectedIndex: number | null;
+  selectedOption: string | null;
+  correct: boolean;
+  timeLeft: number;
+  points: number;
+}
+
+export interface University {
+  id: string;
+  name: string;
+}
+
+export interface Subject {
+  id: string;
+  university_id: string;
+  name: string;
+}
+
+export interface Chair {
+  id: string;
+  subject_id: string;
+  name: string;
+}
+
+export interface TaxonomySuggestion {
+  id: string;
+  level: 'university' | 'subject' | 'chair';
+  proposed_name: string;
+  university_id: string | null;
+  subject_id: string | null;
+  status: 'pending' | 'approved' | 'rejected';
+  created_at: string;
+}
+
+export interface Submission {
+  id: string;
+  created_at: string;
+  university: string;
+  subject: string;
+  chair: string;
+  source_notes?: string;
+  material_type: 'apunte' | 'preguntero_choice' | 'pregunta_respuesta';
+  file_url: string;
+  file_type: string;
+  processed: boolean;
+  extracted_questions?: Question[];
+}
+--- N:\Medicina\6to\Aprobados\project-bolt-sb1-tducdbwf\project\src\vite-env.d.ts ---
+/// <reference types="vite/client" />

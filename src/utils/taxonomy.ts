@@ -39,6 +39,9 @@ const UNIVERSITY_ALIAS_MAP: Record<string, string> = {
   'barcelo': 'Fundación Barceló',
 };
 
+// Estos mapas quedan como "atajos" para casos puntuales que querramos forzar
+// (por ejemplo, una sigla ambigua). Ya NO son la única defensa contra duplicados:
+// la deduplicación genérica por diacríticos en loadTaxonomy() cubre el resto.
 const SUBJECT_ALIAS_MAP: Record<string, string> = {
   'infectologia': 'Infectología',
   'infectologia medica': 'Infectología',
@@ -98,6 +101,31 @@ export function taxonomicKey(value: string): string {
   return normalizeTaxonomyText(value);
 }
 
+// ---------------------------------------------------------------------------
+// NUEVO: deduplicación genérica por diacríticos.
+//
+// Cuando dos filas de la base colisionan en la misma clave normalizada (mismo
+// texto sin tildes/mayúsculas/espacios) — típicamente por un typo de tilde
+// cargado a mano o por una importación duplicada — en vez de quedarnos con
+// "la primera que aparezca" de forma no determinística, elegimos como nombre
+// canónico la variante con MÁS diacríticos (en español, la forma acentuada
+// casi siempre es la ortografía correcta: "Ginecología" > "Ginecologia").
+// Esto reemplaza la necesidad de mantener un alias manual por cada materia.
+// ---------------------------------------------------------------------------
+function countDiacritics(value: string): number {
+  const marks = value.normalize('NFD').match(/[\u0300-\u036f]/g);
+  return marks ? marks.length : 0;
+}
+
+function pickCanonicalVariant(names: string[]): string {
+  return [...names].sort((a, b) => {
+    const diacriticDiff = countDiacritics(b) - countDiacritics(a);
+    if (diacriticDiff !== 0) return diacriticDiff;
+    if (a.length !== b.length) return a.length - b.length;
+    return a.localeCompare(b, 'es');
+  })[0];
+}
+
 export async function loadTaxonomy(): Promise<{
   universities: University[];
   subjects: Subject[];
@@ -117,64 +145,91 @@ export async function loadTaxonomy(): Promise<{
   const subjectsRaw = subjectsResult.data ?? [];
   const chairsRaw = chairsResult.data ?? [];
 
-  const universityMap = new Map<string, University>();
-  const universityIdToCanonicalId = new Map<string, string>();
+  // --- Universidades: dos pasadas (agrupar por clave, elegir mejor variante) ---
+  type UniRow = { id: string; name: string };
+  const universityBuckets = new Map<string, UniRow[]>();
 
   for (const row of universitiesRaw) {
     const canonicalName = canonicalizeUniversityName(row.name);
-    const normalizedKey = normalizeString(canonicalName);
-    const existing = universityMap.get(normalizedKey);
+    const key = normalizeString(canonicalName);
+    const bucket = universityBuckets.get(key) ?? [];
+    bucket.push({ id: row.id, name: canonicalName });
+    universityBuckets.set(key, bucket);
+  }
 
-    if (!existing) {
-      universityMap.set(normalizedKey, {
-        id: row.id,
-        name: canonicalName,
-      });
-      universityIdToCanonicalId.set(row.id, row.id);
-      continue;
+  const universityMap = new Map<string, University>();
+  const universityIdToCanonicalId = new Map<string, string>();
+
+  for (const bucket of universityBuckets.values()) {
+    const bestName = pickCanonicalVariant(bucket.map((r) => r.name));
+    const canonicalRow = bucket.find((r) => r.name === bestName) ?? bucket[0];
+
+    universityMap.set(normalizeString(bestName), { id: canonicalRow.id, name: bestName });
+
+    for (const row of bucket) {
+      universityIdToCanonicalId.set(row.id, canonicalRow.id);
     }
-
-    universityIdToCanonicalId.set(row.id, existing.id);
   }
 
   const universities = Array.from(universityMap.values());
 
-  const subjectMap = new Map<string, Subject>();
-  const subjectIdToCanonicalId = new Map<string, string>();
+  // --- Materias: dos pasadas ---
+  type SubjRow = { id: string; university_id: string; name: string };
+  const subjectBuckets = new Map<string, SubjRow[]>();
 
   for (const row of subjectsRaw) {
     const canonicalUniversityId = universityIdToCanonicalId.get(row.university_id) ?? row.university_id;
     const canonicalName = canonicalizeTaxonomyName('subject', row.name);
-    const normalizedKey = `${normalizeString(canonicalUniversityId)}|${normalizeString(canonicalName)}`;
-    const existing = subjectMap.get(normalizedKey);
+    const key = `${normalizeString(canonicalUniversityId)}|${normalizeString(canonicalName)}`;
+    const bucket = subjectBuckets.get(key) ?? [];
+    bucket.push({ id: row.id, university_id: canonicalUniversityId, name: canonicalName });
+    subjectBuckets.set(key, bucket);
+  }
 
-    if (!existing) {
-      subjectMap.set(normalizedKey, {
-        id: row.id,
-        university_id: canonicalUniversityId,
-        name: canonicalName,
-      });
-      subjectIdToCanonicalId.set(row.id, row.id);
-      continue;
+  const subjectMap = new Map<string, Subject>();
+  const subjectIdToCanonicalId = new Map<string, string>();
+
+  for (const bucket of subjectBuckets.values()) {
+    const bestName = pickCanonicalVariant(bucket.map((r) => r.name));
+    const canonicalRow = bucket.find((r) => r.name === bestName) ?? bucket[0];
+
+    subjectMap.set(`${normalizeString(canonicalRow.university_id)}|${normalizeString(bestName)}`, {
+      id: canonicalRow.id,
+      university_id: canonicalRow.university_id,
+      name: bestName,
+    });
+
+    for (const row of bucket) {
+      subjectIdToCanonicalId.set(row.id, canonicalRow.id);
     }
-
-    subjectIdToCanonicalId.set(row.id, existing.id);
   }
 
   const subjects = Array.from(subjectMap.values());
 
-  const chairMap = new Map<string, Chair>();
+  // --- Cátedras: dos pasadas ---
+  type ChairRow = { id: string; subject_id: string; name: string };
+  const chairBuckets = new Map<string, ChairRow[]>();
+
   for (const row of chairsRaw) {
     const canonicalSubjectId = subjectIdToCanonicalId.get(row.subject_id) ?? row.subject_id;
     const canonicalName = canonicalizeTaxonomyName('chair', row.name);
-    const normalizedKey = `${normalizeString(canonicalSubjectId)}|${normalizeString(canonicalName)}`;
-    if (!chairMap.has(normalizedKey)) {
-      chairMap.set(normalizedKey, {
-        id: row.id,
-        subject_id: canonicalSubjectId,
-        name: canonicalName,
-      });
-    }
+    const key = `${normalizeString(canonicalSubjectId)}|${normalizeString(canonicalName)}`;
+    const bucket = chairBuckets.get(key) ?? [];
+    bucket.push({ id: row.id, subject_id: canonicalSubjectId, name: canonicalName });
+    chairBuckets.set(key, bucket);
+  }
+
+  const chairMap = new Map<string, Chair>();
+
+  for (const bucket of chairBuckets.values()) {
+    const bestName = pickCanonicalVariant(bucket.map((r) => r.name));
+    const canonicalRow = bucket.find((r) => r.name === bestName) ?? bucket[0];
+
+    chairMap.set(`${normalizeString(canonicalRow.subject_id)}|${normalizeString(bestName)}`, {
+      id: canonicalRow.id,
+      subject_id: canonicalRow.subject_id,
+      name: bestName,
+    });
   }
 
   const chairs = Array.from(chairMap.values());
