@@ -128,7 +128,6 @@ export async function ensureTaxonomyFromSubmission(
   const subjName = canonicalizeTaxonomyName('subject', submission.subject);
   const chairName = canonicalizeTaxonomyName('chair', submission.chair);
 
-  // 1. Intentar resolver vía RPC si la función de base existe
   if (adminPassword) {
     try {
       const { data, error } = await supabase.rpc('admin_ensure_taxonomy', {
@@ -146,11 +145,10 @@ export async function ensureTaxonomyFromSubmission(
         };
       }
     } catch {
-      // Si el RPC falla o no coincide la firma, continúa al fallback nativo
+      // Fallback nativo
     }
   }
 
-  // 2. Fallback nativo directo con limpieza y búsqueda normalizada para evitar duplicados.
   const { data: universities } = await supabase.from('universities').select('id, name');
   const { data: subjects } = await supabase.from('subjects').select('id, university_id, name');
   const { data: chairs } = await supabase.from('chairs').select('id, subject_id, name');
@@ -219,6 +217,7 @@ export async function insertQuestion(
   submissionId: string,
   adminPassword?: string,
   chairId?: string,
+  subjectId?: string, // <-- Agregado
   metadata?: { university?: string; subject?: string; chair?: string }
 ): Promise<string> {
   void adminPassword;
@@ -232,13 +231,13 @@ export async function insertQuestion(
       explanation: explicacion || '',
       submission_id: submissionId || null,
       chair_id: chairId || null,
+      subject_id: subjectId || null, // <-- Agregado
       university: metadata?.university || null,
       subject: metadata?.subject || null,
       chair: metadata?.chair || null,
       difficulty: 'media',
-      author_name: null,
-      source_type: 'official',
       active: true,
+      is_active: true, // <-- Agregado y corregido
     })
     .select('id')
     .single();
@@ -284,6 +283,7 @@ export async function insertBatchQuestions(
   }>,
   submissionId: string,
   chairId: string,
+  subjectId: string, // <-- Agregado
   metadata?: { university?: string; subject?: string; chair?: string }
 ): Promise<void> {
   const rows = questions.map((q) => {
@@ -293,6 +293,7 @@ export async function insertBatchQuestions(
     return {
       submission_id: submissionId || null,
       chair_id: chairId || null,
+      subject_id: subjectId || null, // <-- Agregado
       university: metadata?.university || null,
       subject: metadata?.subject || null,
       chair: metadata?.chair || null,
@@ -301,9 +302,8 @@ export async function insertBatchQuestions(
       correct_option: corr,
       explanation: q.explicacion || '',
       difficulty: 'media',
-      author_name: null,
-      source_type: 'official',
       active: true,
+      is_active: true, // <-- Agregado y corregido
     };
   });
 
@@ -326,9 +326,10 @@ export async function approveBatchQuestions(
   submissionId: string,
   adminPassword: string,
   chairId?: string,
+  subjectId?: string,
   metadata?: { university?: string; subject?: string; chair?: string }
 ): Promise<number> {
-  await insertBatchQuestions(questions, submissionId, chairId || '', metadata);
+  await insertBatchQuestions(questions, submissionId, chairId || '', subjectId || '', metadata);
   await markSubmissionProcessed(submissionId, adminPassword);
   return questions.length;
 }

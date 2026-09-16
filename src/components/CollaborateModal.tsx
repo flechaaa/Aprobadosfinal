@@ -1,7 +1,9 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Upload, X, FileText, CheckCircle2, AlertCircle, Loader2, Bell } from 'lucide-react';
 import { uploadSubmission, validateFile, type MaterialType } from '@/utils/submissions';
 import { notificationSupported, requestNotificationPermission, registerBrowserPushSubscription, getOrCreateSessionId } from '@/utils/notifications';
+import { supabase } from '@/lib/supabase';
+import { AutocompleteField } from '@/components/AutocompleteField';
 
 interface CollaborateModalProps {
   open: boolean;
@@ -29,6 +31,45 @@ export function CollaborateModal({ open, onClose }: CollaborateModalProps) {
   const [notifyWhenApproved, setNotifyWhenApproved] = useState(false);
   const [notifyStatus, setNotifyStatus] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Estados de taxonomía inteligente
+  const [universities, setUniversities] = useState<{ id: string; name: string }[]>([]);
+  const [subjects, setSubjects] = useState<{ id: string; name: string; university_id: string }[]>([]);
+  const [chairs, setChairs] = useState<{ id: string; name: string; subject_id: string }[]>([]);
+
+  // Cargar taxonomía al abrir el modal
+  useEffect(() => {
+    if (!open) return;
+    (async () => {
+      const [{ data: uniData }, { data: subjData }, { data: chairData }] = await Promise.all([
+        supabase.from('universities').select('id, name'),
+        supabase.from('subjects').select('id, name, university_id'),
+        supabase.from('chairs').select('id, name, subject_id'),
+      ]);
+      setUniversities(uniData ?? []);
+      setSubjects(subjData ?? []);
+      setChairs(chairData ?? []);
+    })();
+  }, [open]);
+
+  // Cálculo de sugerencias encadenadas
+  const normalize = (s: string) => s.trim().toLocaleLowerCase().replace(/\s+/g, ' ');
+  const matchedUniversity = universities.find((u) => normalize(u.name) === normalize(university));
+  const subjectCandidates = matchedUniversity
+    ? subjects.filter((s) => s.university_id === matchedUniversity.id)
+    : subjects;
+  const subjectSuggestions = subjectCandidates
+    .map((s) => s.name);
+  const matchedSubject = subjectCandidates.find(
+    (s) => normalize(s.name) === normalize(subject),
+  );
+  const chairCandidates = matchedSubject
+    ? chairs.filter((c) => c.subject_id === matchedSubject.id)
+    : matchedUniversity
+      ? chairs.filter((c) => subjectCandidates.some((s) => s.id === c.subject_id))
+      : chairs;
+  const chairSuggestions = chairCandidates
+    .map((c) => c.name);
 
   const resetForm = useCallback(() => {
     setUniversity('');
@@ -149,48 +190,33 @@ export function CollaborateModal({ open, onClose }: CollaborateModalProps) {
             </div>
           ) : (
             <>
-              {/* Required fields */}
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1.5">
-                  Universidad *
-                </label>
-                <input
-                  type="text"
-                  value={university}
-                  onChange={(e) => setUniversity(e.target.value)}
-                  placeholder="Ej: Universidad de Buenos Aires"
-                  maxLength={200}
-                  className="w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-sm text-gray-800 outline-none focus:border-teal-500"
-                />
-              </div>
+              {/* Autocomplete fields for taxonomy */}
+              <AutocompleteField
+                label="Universidad *"
+                value={university}
+                onChange={setUniversity}
+                suggestions={universities.map((u) => u.name)}
+                placeholder="Ej: Universidad de Buenos Aires"
+                maxLength={200}
+              />
 
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1.5">
-                  Materia *
-                </label>
-                <input
-                  type="text"
-                  value={subject}
-                  onChange={(e) => setSubject(e.target.value)}
-                  placeholder="Ej: Infectología"
-                  maxLength={200}
-                  className="w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-sm text-gray-800 outline-none focus:border-teal-500"
-                />
-              </div>
+              <AutocompleteField
+                label="Materia *"
+                value={subject}
+                onChange={setSubject}
+                suggestions={subjectSuggestions}
+                placeholder="Ej: Infectología"
+                maxLength={200}
+              />
 
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1.5">
-                  Cátedra / Docente *
-                </label>
-                <input
-                  type="text"
-                  value={chair}
-                  onChange={(e) => setChair(e.target.value)}
-                  placeholder="Ej: Cátedra 1 - Dr. Pérez"
-                  maxLength={200}
-                  className="w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-sm text-gray-800 outline-none focus:border-teal-500"
-                />
-              </div>
+              <AutocompleteField
+                label="Cátedra / Docente *"
+                value={chair}
+                onChange={setChair}
+                suggestions={chairSuggestions}
+                placeholder="Ej: Cátedra 1 - Dr. Pérez"
+                maxLength={200}
+              />
 
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1.5">

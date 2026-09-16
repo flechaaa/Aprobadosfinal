@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
-import { Trophy, RefreshCw, Check, X, Swords, Home, Save, Medal, GraduationCap, Download, Share2, Camera } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { Trophy, RefreshCw, Check, X, Swords, Home, Medal, GraduationCap, Download, Camera } from 'lucide-react';
 import { toBlob } from 'html-to-image';
 import { encodeChallenge } from '@/utils/game';
 import { saveRankingScore } from '@/utils/rankings';
@@ -67,7 +67,7 @@ export function ResultsScreen({
   const approved = accuracyPercentage >= 60;
   const animatedScore = useCountUp(totalPoints, 1200);
   const [shareUrl, setShareUrl] = useState('');
-  const [playerAlias, setPlayerAlias] = useState(playerName.trim() || 'Anónimo');
+  const playerAlias = playerName.trim() || 'Anónimo';
   const [savingScore, setSavingScore] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -256,7 +256,7 @@ export function ResultsScreen({
 
   const rating = getRating();
 
-  const handleSaveScore = async () => {
+  const handleSaveScore = useCallback(async () => {
     if (!selection || !selection.chairId || selection.chairId === 'all') {
       return;
     }
@@ -290,7 +290,11 @@ export function ResultsScreen({
     } finally {
       setSavingScore(false);
     }
-  };
+  }, [onTaxonomyRefresh, playerAlias, selectedChair, selectedSubject, selectedUniversity, selection, totalPoints]);
+
+  useEffect(() => {
+    void handleSaveScore();
+  }, [handleSaveScore]);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-teal-50">
@@ -476,30 +480,18 @@ export function ResultsScreen({
           </div>
         )}
 
-        {/* Ranking save row */}
+        {/* Ranking status */}
         {selection && selection.chairId && selection.chairId !== 'all' && (
           <div className="bg-white rounded-3xl shadow-xl p-6 mb-6">
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="flex-1 min-w-[170px]">
-                <label className="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">Tu nombre/apodo</label>
-                <input
-                  value={playerAlias}
-                  onChange={(e) => setPlayerAlias(e.target.value)}
-                  maxLength={50}
-                  className="w-full rounded-2xl border-2 border-gray-200 px-4 py-3 text-gray-800 outline-none focus:border-teal-500"
-                  placeholder="Ingresá tu apodo"
-                />
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wide text-gray-500">Ranking</p>
+                <p className="text-sm font-semibold text-gray-700">
+                  {savingScore ? 'Guardando tu puntaje...' : saveSuccess ? 'Puntaje guardado automáticamente.' : 'El puntaje se guarda automáticamente.'}
+                </p>
+                {saveError && <p className="mt-1 text-sm font-bold text-red-600">{saveError}</p>}
               </div>
-              <div className="flex gap-2 items-end">
-                <button
-                  type="button"
-                  disabled={savingScore}
-                  onClick={handleSaveScore}
-                  className="inline-flex items-center justify-center gap-2 bg-teal-600 text-white font-bold px-5 py-3 rounded-2xl hover:bg-teal-700 transition shadow-md disabled:opacity-60"
-                >
-                  <Save className="w-4 h-4" />
-                  {savingScore ? 'Guardando...' : 'Guardar puntaje'}
-                </button>
+              <div className="flex gap-2 items-center">
                 <button
                   type="button"
                   onClick={() => setRankingOpen(true)}
@@ -510,8 +502,6 @@ export function ResultsScreen({
                 </button>
               </div>
             </div>
-            {saveError && <p className="mt-3 text-sm font-bold text-red-600">{saveError}</p>}
-            {saveSuccess && <p className="mt-3 text-sm font-bold text-green-700">Puntaje guardado con éxito.</p>}
           </div>
         )}
 

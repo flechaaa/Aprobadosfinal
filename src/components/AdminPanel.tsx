@@ -255,8 +255,7 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
             correct_option: fix.correcta,
             explanation: fix.explicacion,
             active: true,
-            author_name: null,
-            source_type: 'official',
+            is_active: true,
           },
         ]);
       }
@@ -385,8 +384,7 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
             correct_option: editingDraft.correcta,
             explanation: editingDraft.explicacion,
             active: true,
-            author_name: null,
-            source_type: 'official',
+            is_active: true,
           },
         ]);
       }
@@ -504,6 +502,7 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
         selected.id,
         adminPassword,
         taxonomy.chairId,
+        taxonomy.subjectId, // <-- CORREGIDO: Pasamos subjectId aquí
         {
           university: selected.university,
           subject: selected.subject,
@@ -530,11 +529,12 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
       const taxonomy = await ensureTaxonomyFromSubmission(selected, adminPassword);
       const pendingQuestions = questions.filter((q) => !q.approved);
 
-      // Inserción atómica en bloque de todas las preguntas juntas
+      // Inserción atómica en bloque de todas las preguntas juntas con subjectId
       await insertBatchQuestions(
         pendingQuestions,
         selected.id,
         taxonomy.chairId,
+        taxonomy.subjectId, // <-- CORREGIDO: Pasamos subjectId aquí
         {
           university: selected.university,
           subject: selected.subject,
@@ -1213,7 +1213,6 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
                       </p>
                     </div>
 
-                    {/* Propuesta de corrección del usuario */}
                     {report.suggested_fix && (
                       <div className="rounded-xl border border-teal-200 bg-teal-50/70 p-3.5 space-y-2 mt-3">
                         <div className="flex items-center justify-between">
@@ -1269,7 +1268,6 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
                       </div>
                     )}
 
-                    {/* Editor integrado si se presiona "Corregir Pregunta" */}
                     {editingReportId === report.id && editingDraft && (
                       <div className="mt-4 rounded-xl border-2 border-teal-500/30 bg-teal-50/40 p-4 space-y-3">
                         <p className="text-xs font-bold uppercase text-teal-800">Editar y Corregir:</p>
