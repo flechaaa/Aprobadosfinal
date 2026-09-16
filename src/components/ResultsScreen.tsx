@@ -147,6 +147,41 @@ export function ResultsScreen({
     }
   };
 
+  const handleShareResultToWhatsApp = async () => {
+    const message = `¡Obtuve ${totalPoints} puntos en Aprobados! ${shareUrl}`;
+
+    if (!storyCardRef.current) {
+      window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
+      return;
+    }
+
+    try {
+      const blob = await toBlob(storyCardRef.current, {
+        cacheBust: true,
+        pixelRatio: 2,
+        skipFonts: false,
+        type: 'image/png',
+      });
+
+      if (!blob) {
+        throw new Error('No se pudo crear la imagen del resultado.');
+      }
+
+      const file = new File([blob], 'mi-puntaje-trivia.png', { type: 'image/png' });
+      if (typeof navigator !== 'undefined' && 'canShare' in navigator && typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          text: message,
+        });
+        return;
+      }
+    } catch (err) {
+      console.error('Error compartiendo el resultado por WhatsApp:', err);
+    }
+
+    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
+  };
+
   useEffect(() => {
     const data: ChallengeData = { q: questionIndices, n: playerName, s: totalPoints };
     const encoded = encodeChallenge(data);
@@ -469,6 +504,14 @@ export function ResultsScreen({
               >
                 <Camera className="w-4 h-4" />
                 Compartir en historias de Instagram
+              </button>
+              <button
+                type="button"
+                onClick={handleShareResultToWhatsApp}
+                className="inline-flex items-center justify-center gap-2 bg-[#25D366] text-white font-bold px-4 py-3 rounded-2xl hover:bg-[#20bd5a] transition shadow-md"
+              >
+                <WhatsAppIcon className="w-4 h-4" />
+                Compartir por WhatsApp
               </button>
             </div>
 
