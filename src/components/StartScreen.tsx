@@ -1,10 +1,9 @@
 import { useState } from 'react';
-import { GraduationCap, Clock, Users, Trophy, Play, Swords, Upload, PlusCircle } from 'lucide-react';
-import { getAllQuestions } from '@/utils/game';
-import { TaxonomyPicker } from '@/components/TaxonomyPicker';
+import { GraduationCap, Clock, Users, Trophy, Play, Swords, Upload, PlusCircle, Zap } from 'lucide-react';
 import { CollaborateModal } from '@/components/CollaborateModal';
 import { RankingModal } from '@/components/RankingModal';
 import { QuestionSuggestionModal } from '@/components/QuestionSuggestionModal';
+import { PlaySelectionModal } from '@/components/PlaySelectionModal';
 import type { TaxonomySelection } from '@/components/TaxonomyPicker';
 import type { Chair, ChallengeData, Subject, University } from '@/types';
 
@@ -23,35 +22,36 @@ interface StartScreenProps {
 
 export function StartScreen({ onStart, onQuickGame, challengeData, universities, subjects, chairs, taxonomyError, totalQuestions, onOpenAdmin, questionsLoadError }: StartScreenProps) {
   const [name, setName] = useState('');
-  const [selection, setSelection] = useState<TaxonomySelection>({ universityId: '', subjectId: '', chairId: '' });
+  const [playOpen, setPlayOpen] = useState(false);
   const [collaborateOpen, setCollaborateOpen] = useState(false);
   const [questionSuggestionOpen, setQuestionSuggestionOpen] = useState(false);
   const [rankingOpen, setRankingOpen] = useState(false);
 
-  const canStart = Boolean(selection.universityId && selection.subjectId && selection.chairId);
+  const handleOpenPlay = () => {
+    setPlayOpen(true);
+  };
 
-  const handleStart = () => {
-    if (!canStart) return;
-    onStart(name.trim() || 'Anónimo', selection);
+  const handleStartWithSelection = (playerName: string, selection: TaxonomySelection) => {
+    setPlayOpen(false);
+    onStart(playerName, selection);
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-teal-600 via-emerald-600 to-teal-700 flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Decorative blobs */}
       <div className="absolute top-0 -left-20 w-72 h-72 bg-teal-400/20 rounded-full blur-3xl" />
       <div className="absolute bottom-0 -right-20 w-96 h-96 bg-emerald-400/20 rounded-full blur-3xl" />
 
       <div className="w-full max-w-md relative z-10">
-        {/* Logo */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-20 h-20 bg-white/10 backdrop-blur-sm rounded-3xl mb-4 border border-white/20 animate-float shadow-xl">
             <GraduationCap className="w-10 h-10 text-white" />
           </div>
           <h1 className="text-4xl font-extrabold text-white tracking-tight">Aprobados</h1>
-          <p className="text-teal-100 mt-2 text-lg">Trivia para estudiantes</p>
+          <p className="mt-3 text-base font-medium text-teal-50/90 tracking-wide">
+            Desafía a tus amigos a ver quién sabe más.
+          </p>
         </div>
 
-        {/* Challenge banner */}
         {challengeData && (
           <div className="bg-amber-400/20 backdrop-blur-sm border border-amber-300/40 rounded-2xl p-4 mb-4 animate-fade-in">
             <div className="flex items-center gap-3">
@@ -59,9 +59,7 @@ export function StartScreen({ onStart, onQuickGame, challengeData, universities,
                 <Swords className="w-5 h-5 text-amber-900" />
               </div>
               <div>
-                <p className="text-white font-semibold">
-                  {challengeData.n} te desafía
-                </p>
+                <p className="text-white font-semibold">{challengeData.n} te desafía</p>
                 <p className="text-amber-100 text-sm">
                   Puntaje a superar: <span className="font-bold text-white">{challengeData.s}</span> puntos
                 </p>
@@ -70,71 +68,63 @@ export function StartScreen({ onStart, onQuickGame, challengeData, universities,
           </div>
         )}
 
-        {/* Card */}
         <div className="bg-white rounded-3xl shadow-2xl p-6 animate-slide-up">
-          <div className="mb-4">
+          <div className="mb-5">
             <button
               type="button"
-              onClick={() => onQuickGame(name.trim() || 'Anónimo')}
-              className="w-full rounded-2xl bg-gradient-to-r from-fuchsia-600 via-rose-500 to-amber-500 px-4 py-3 text-sm font-black uppercase tracking-wide text-white shadow-lg hover:scale-[1.015] hover:shadow-xl transition-all"
+              onClick={handleOpenPlay}
+              className="w-full rounded-2xl bg-gradient-to-r from-teal-600 via-emerald-600 to-teal-700 px-4 py-4 text-base font-black uppercase tracking-wide text-white shadow-lg hover:scale-[1.01] hover:shadow-xl transition-all"
             >
-              Partida Rápida
+              <span className="inline-flex items-center justify-center gap-2">
+                <Play className="h-5 w-5" fill="currentColor" />
+                Jugar
+              </span>
             </button>
-          </div>
-          <div className="mb-5 border-t border-gray-100 pt-5">
-            <div className="mb-3">
-              <p className="text-sm font-bold text-gray-800">Elegí tu clasificación</p>
-              <p className="mt-1 text-xs text-gray-500">Nos ayuda a ordenar las partidas por carrera y cátedra.</p>
-            </div>
-            <TaxonomyPicker universities={universities} subjects={subjects} chairs={chairs} value={selection} onChange={setSelection} />
             {taxonomyError && <p className="mt-3 rounded-xl bg-amber-50 p-3 text-xs font-semibold text-amber-800">{taxonomyError}</p>}
             {questionsLoadError && <p className="mt-3 rounded-xl bg-rose-50 p-3 text-xs font-bold text-rose-700 border border-rose-200">{questionsLoadError}</p>}
           </div>
 
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleStart()}
-            placeholder="¿Cómo te llamás?"
-            className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-teal-500 focus:outline-none transition-colors text-gray-800 placeholder-gray-400"
-            maxLength={20}
-          />
+          <div className="space-y-3 border-t border-gray-100 pt-5">
+            <button
+              type="button"
+              onClick={() => onQuickGame(name.trim() || 'Anónimo')}
+              className="w-full rounded-xl border-2 border-fuchsia-200 bg-gradient-to-r from-fuchsia-50 to-rose-50 py-3 text-sm font-bold text-fuchsia-700 transition hover:bg-fuchsia-100 active:scale-[0.98] flex items-center justify-center gap-2"
+            >
+              <Zap className="h-4 w-4" />
+              Partida rápida
+            </button>
 
-          <button
-            onClick={handleStart}
-            disabled={!canStart}
-            className="w-full mt-4 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white font-bold py-4 rounded-xl transition-all shadow-lg hover:shadow-xl active:scale-[0.98] flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:from-gray-300 disabled:to-gray-400 disabled:shadow-none"
-          >
-            <Play className="w-5 h-5" fill="currentColor" />
-            {canStart ? (challengeData ? 'Aceptar el desafío' : 'Comenzar a jugar') : 'Completá la clasificación para jugar'}
+            <button
+              type="button"
+              onClick={() => setRankingOpen(true)}
+              className="w-full rounded-xl border-2 border-teal-200 bg-teal-50 py-3 text-sm font-bold text-teal-700 transition hover:bg-teal-100 active:scale-[0.98]"
+            >
+              Ver ranking
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setQuestionSuggestionOpen(true)}
+              className="w-full flex items-center justify-center gap-2 rounded-xl border-2 border-emerald-200 bg-emerald-50 py-3 text-sm font-bold text-emerald-700 transition hover:bg-emerald-100 active:scale-[0.98]"
+            >
+              <PlusCircle className="h-4 w-4" />
+              Proponer una nueva pregunta
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setCollaborateOpen(true)}
+              className="w-full flex items-center justify-center gap-2 rounded-xl border-2 border-teal-200 bg-teal-50 py-3 text-sm font-bold text-teal-700 transition hover:bg-teal-100 active:scale-[0.98]"
+            >
+              <Upload className="h-4 w-4" />
+              Enviar material
+            </button>
+          </div>
+
+          <button type="button" onClick={onOpenAdmin} className="mt-4 w-full text-xs font-bold text-gray-400 transition hover:text-teal-700">
+            Panel de administración
           </button>
 
-          <button
-            type="button"
-            onClick={() => setRankingOpen(true)}
-            className="mt-3 w-full rounded-xl border-2 border-teal-200 bg-teal-50 py-3 text-sm font-bold text-teal-700 transition hover:bg-teal-100 active:scale-[0.98]"
-          >
-            Ver ranking
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setQuestionSuggestionOpen(true)}
-            className="mt-4 w-full flex items-center justify-center gap-2 rounded-xl border-2 border-emerald-200 bg-emerald-50 py-3 text-sm font-bold text-emerald-700 transition hover:bg-emerald-100 active:scale-[0.98]"
-          >
-            <PlusCircle className="h-4 w-4" />
-            Proponer una nueva pregunta
-          </button>
-
-          <button type="button" onClick={() => setCollaborateOpen(true)} className="mt-4 w-full flex items-center justify-center gap-2 rounded-xl border-2 border-teal-200 bg-teal-50 py-3 text-sm font-bold text-teal-700 transition hover:bg-teal-100 active:scale-[0.98]">
-            <Upload className="h-4 w-4" />
-            Enviar material
-          </button>
-
-          <button type="button" onClick={onOpenAdmin} className="mt-3 w-full text-xs font-bold text-gray-400 transition hover:text-teal-700">Panel de administración</button>
-
-          {/* Info badges */}
           <div className="flex items-center justify-center gap-3 mt-6 text-sm text-gray-500">
             <div className="flex items-center gap-1.5">
               <Trophy className="w-4 h-4 text-teal-600" />
@@ -157,6 +147,16 @@ export function StartScreen({ onStart, onQuickGame, challengeData, universities,
           {totalQuestions} preguntas disponibles
         </p>
       </div>
+
+      <PlaySelectionModal
+        open={playOpen}
+        initialName={name}
+        universities={universities}
+        subjects={subjects}
+        chairs={chairs}
+        onClose={() => setPlayOpen(false)}
+        onStart={handleStartWithSelection}
+      />
 
       <RankingModal open={rankingOpen} chairId={null} chairs={chairs} onClose={() => setRankingOpen(false)} />
       <CollaborateModal open={collaborateOpen} onClose={() => setCollaborateOpen(false)} />

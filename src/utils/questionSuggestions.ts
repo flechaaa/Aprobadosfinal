@@ -7,6 +7,7 @@ export interface QuestionSuggestionPayload {
   university_id: string;
   subject_id: string;
   chair_id: string;
+  unit_name?: string | null;
   question_text: string;
   options: string[];
   correct_option: number;
@@ -21,6 +22,7 @@ export interface QuestionSuggestionRecord {
   university_id: string;
   subject_id: string;
   chair_id: string;
+  unit_name?: string | null;
   question_text: string;
   options: string[];
   correct_option: number;
@@ -69,6 +71,7 @@ export async function submitQuestionSuggestion(payload: QuestionSuggestionPayloa
       university_id: payload.university_id,
       subject_id: payload.subject_id,
       chair_id: payload.chair_id,
+      unit_name: payload.unit_name?.trim() || null,
       question_text: payload.question_text.trim(),
       options: payload.options.map((option) => option.trim()),
       correct_option: payload.correct_option,
@@ -87,7 +90,7 @@ export async function submitQuestionSuggestion(payload: QuestionSuggestionPayloa
 export async function loadPendingQuestionSuggestions(): Promise<QuestionSuggestionRecord[]> {
   const { data: rows, error } = await supabase
     .from('question_suggestions')
-    .select('id, university_id, subject_id, chair_id, question_text, options, correct_option, explanation, difficulty, author_name, status, created_at')
+    .select('id, university_id, subject_id, chair_id, unit_name, question_text, options, correct_option, explanation, difficulty, author_name, status, created_at')
     .eq('status', 'pending')
     .order('created_at', { ascending: false });
 
@@ -136,6 +139,7 @@ export async function approveQuestionSuggestion(suggestion: QuestionSuggestionRe
       active: true,
       subject_id: taxonomy.subjectId,
       chair_id: taxonomy.chairId,
+      unit: suggestion.unit_name?.trim() || null,
       university: universityName,
       subject: subjectName,
       chair: chairName,

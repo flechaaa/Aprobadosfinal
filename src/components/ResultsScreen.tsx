@@ -67,6 +67,7 @@ export function ResultsScreen({
   const approved = accuracyPercentage >= 60;
   const animatedScore = useCountUp(totalPoints, 1200);
   const [shareUrl, setShareUrl] = useState('');
+  const [showWhatsAppMenu, setShowWhatsAppMenu] = useState(false);
   const playerAlias = playerName.trim() || 'Anónimo';
   const [savingScore, setSavingScore] = useState(false);
   const [saveError, setSaveError] = useState('');
@@ -147,38 +148,35 @@ export function ResultsScreen({
     }
   };
 
-  const handleShareResultToWhatsApp = async () => {
-    const message = `¡Obtuve ${totalPoints} puntos en Aprobados! ${shareUrl}`;
+  const buildChallengeUrl = () => {
+    const challengePayload = {
+      q: questionIndices,
+      n: playerAlias,
+      s: totalPoints,
+      selection: selection
+        ? {
+            universityId: selection.universityId,
+            subjectId: selection.subjectId,
+            partialId: selection.partialId || selection.chairId || '',
+            chairId: selection.chairId || selection.partialId || '',
+            unitId: selection.unitId ?? null,
+          }
+        : undefined,
+    };
 
-    if (!storyCardRef.current) {
-      window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
-      return;
-    }
+    const encoded = encodeChallenge(challengePayload);
+    const url = new URL(window.location.href);
+    url.search = `?mode=challenge&c=${encodeURIComponent(encoded)}`;
+    return url.toString();
+  };
 
-    try {
-      const blob = await toBlob(storyCardRef.current, {
-        cacheBust: true,
-        pixelRatio: 2,
-        skipFonts: false,
-        type: 'image/png',
-      });
+  const buildWhatsAppCombinedMessage = () => {
+    const challengeUrl = buildChallengeUrl();
+    return `¡Hice ${totalPoints} puntos en Aprobados! 🎯 ¡Desafía a un amigo a superarlo! ${challengeUrl}`;
+  };
 
-      if (!blob) {
-        throw new Error('No se pudo crear la imagen del resultado.');
-      }
-
-      const file = new File([blob], 'mi-puntaje-trivia.png', { type: 'image/png' });
-      if (typeof navigator !== 'undefined' && 'canShare' in navigator && typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })) {
-        await navigator.share({
-          files: [file],
-          text: message,
-        });
-        return;
-      }
-    } catch (err) {
-      console.error('Error compartiendo el resultado por WhatsApp:', err);
-    }
-
+  const handleWhatsAppDirect = () => {
+    const message = buildWhatsAppCombinedMessage();
     window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
   };
 
@@ -266,11 +264,6 @@ export function ResultsScreen({
   const handleHome = () => {
     clearFailureEffects();
     onHome();
-  };
-
-  const handleWhatsAppShare = () => {
-    const message = `¡Te desafío a superar mis ${totalPoints} puntos en Aprobados! ¿Podrás ganarle a un estudiante de medicina? ${shareUrl}`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
   };
 
   const isChallenge = challengeData !== null;
@@ -491,27 +484,20 @@ export function ResultsScreen({
             <div className="mt-4 flex flex-wrap items-center gap-3">
               <button
                 type="button"
-                onClick={handleDownloadStory}
-                className="inline-flex items-center justify-center gap-2 bg-teal-600 text-white font-bold px-4 py-3 rounded-2xl hover:bg-teal-700 transition shadow-md"
-              >
-                <Download className="w-4 h-4" />
-                Descargar Imagen
-              </button>
-              <button
-                type="button"
                 onClick={handleShareStoryToInstagram}
                 className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-[#F58529] via-[#DD2A7B] to-[#8134AF] text-white font-bold px-4 py-3 rounded-2xl hover:opacity-90 transition shadow-md"
               >
                 <Camera className="w-4 h-4" />
-                Compartir en historias de Instagram
+                Compartir Historia de Instagram
               </button>
+
               <button
                 type="button"
-                onClick={handleShareResultToWhatsApp}
+                onClick={handleWhatsAppDirect}
                 className="inline-flex items-center justify-center gap-2 bg-[#25D366] text-white font-bold px-4 py-3 rounded-2xl hover:bg-[#20bd5a] transition shadow-md"
               >
                 <WhatsAppIcon className="w-4 h-4" />
-                Compartir por WhatsApp
+                Desafia por wsp
               </button>
             </div>
 
@@ -591,16 +577,6 @@ export function ResultsScreen({
 
         {/* Action buttons */}
         <div className="space-y-3 mb-6">
-          {/* 1. Desafiar por WhatsApp */}
-          <button
-            onClick={handleWhatsAppShare}
-            className="w-full bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold py-4 rounded-xl transition-all shadow-md hover:shadow-lg active:scale-[0.98] flex items-center justify-center gap-2"
-          >
-            <WhatsAppIcon className="w-5 h-5" />
-            Desafiar a un amigo por WhatsApp
-          </button>
-
-          {/* 2. Jugar de nuevo con la misma materia */}
           <button
             onClick={handleRestart}
             className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-4 rounded-xl transition-all shadow-md hover:shadow-lg active:scale-[0.98] flex items-center justify-center gap-2"
@@ -609,7 +585,6 @@ export function ResultsScreen({
             Jugar de nuevo
           </button>
 
-          {/* 3. Volver al menú principal */}
           <button
             onClick={handleHome}
             className="w-full bg-white border-2 border-gray-200 hover:border-gray-400 text-gray-700 font-bold py-4 rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-2"

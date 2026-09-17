@@ -41,6 +41,19 @@ export function GameScreen({ questions: customQuestions, questionIndices, onFini
 
   // Si vienen preguntas personalizadas desde Supabase las usamos directo; de lo contrario fallback al json
   const activeQuestions = customQuestions && customQuestions.length > 0 ? customQuestions : getAllQuestions();
+  const totalQuestions = customQuestions && customQuestions.length > 0 ? customQuestions.length : questionIndices.length;
+
+  if (!Array.isArray(questionIndices) || questionIndices.length === 0 && !customQuestions?.length) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
+        <div className="max-w-md rounded-3xl bg-white p-8 text-center shadow-xl">
+          <p className="text-lg font-bold text-gray-800">No se pudieron cargar las preguntas.</p>
+          <p className="mt-2 text-sm text-gray-500">Probá volver al menú e iniciar nuevamente.</p>
+        </div>
+      </div>
+    );
+  }
+
   const rawQuestion = customQuestions && customQuestions.length > 0
     ? activeQuestions[currentIdx]
     : activeQuestions[questionIndices[currentIdx]];
@@ -49,8 +62,6 @@ export function GameScreen({ questions: customQuestions, questionIndices, onFini
     if (!rawQuestion) return rawQuestion;
     return shuffleQuestionOptions(rawQuestion);
   }, [rawQuestion]);
-
-  const totalQuestions = customQuestions && customQuestions.length > 0 ? customQuestions.length : questionIndices.length;
   const currentScore = answers.reduce((sum, a) => sum + a.points, 0);
 
   useEffect(() => {

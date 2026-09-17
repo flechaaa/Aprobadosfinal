@@ -6,7 +6,9 @@ import type { Chair, Subject, University } from '@/types';
 export interface TaxonomySelection {
   universityId: string;
   subjectId: string;
-  chairId: string;
+  partialId: string;
+  unitId?: string | null;
+  chairId?: string;
 }
 
 interface TaxonomyPickerProps {
@@ -24,6 +26,9 @@ export function TaxonomyPicker({ universities, subjects, chairs, value, onChange
   const [proposalName, setProposalName] = useState('');
   const [proposalSent, setProposalSent] = useState(false);
   const [proposalError, setProposalError] = useState('');
+
+  const partialId = value.partialId || value.chairId || '';
+  const hasUnit = Boolean(value.unitId && value.unitId.trim());
 
   const availableSubjects = useMemo(
     () => subjects.filter((subject) => subject.university_id === value.universityId),
@@ -94,7 +99,7 @@ export function TaxonomyPicker({ universities, subjects, chairs, value, onChange
         <div className="relative">
           <select
             value={value.universityId}
-            onChange={(event) => onChange({ universityId: event.target.value, subjectId: '', chairId: '' })}
+            onChange={(event) => onChange({ universityId: event.target.value, subjectId: '', partialId: '', unitId: null, chairId: '' })}
             className="w-full appearance-none rounded-xl border-2 border-gray-200 bg-white px-4 py-3 pr-10 text-sm font-medium text-gray-800 outline-none transition-colors focus:border-teal-500"
           >
             <option value="">Elegí tu universidad</option>
@@ -111,7 +116,7 @@ export function TaxonomyPicker({ universities, subjects, chairs, value, onChange
           <select
             value={value.subjectId}
             disabled={!value.universityId}
-            onChange={(event) => onChange({ ...value, subjectId: event.target.value, chairId: '' })}
+            onChange={(event) => onChange({ ...value, subjectId: event.target.value, partialId: '', unitId: null, chairId: '' })}
             className="w-full appearance-none rounded-xl border-2 border-gray-200 bg-white px-4 py-3 pr-10 text-sm font-medium text-gray-800 outline-none transition-colors focus:border-teal-500 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
           >
             <option value="">Elegí una materia</option>
@@ -123,21 +128,42 @@ export function TaxonomyPicker({ universities, subjects, chairs, value, onChange
       </div>
 
       <div>
-        <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-gray-500">Cátedra</label>
+        <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-gray-500">Parcial</label>
         <div className="relative">
           <select
-            value={value.chairId}
+            value={partialId}
             disabled={!value.subjectId}
-            onChange={(event) => onChange({ ...value, chairId: event.target.value })}
+            onChange={(event) => onChange({ ...value, partialId: event.target.value, chairId: event.target.value, unitId: null })}
             className="w-full appearance-none rounded-xl border-2 border-gray-200 bg-white px-4 py-3 pr-10 text-sm font-medium text-gray-800 outline-none transition-colors focus:border-teal-500 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
           >
-            <option value="">Elegí una cátedra</option>
-            <option value="all">Todas</option>
+            <option value="">Elegí un parcial</option>
+            <option value="all">Todos</option>
             {availableChairs.map((chair) => <option key={chair.id} value={chair.id}>{chair.name}</option>)}
           </select>
           <ChevronDown className="pointer-events-none absolute right-3 top-3.5 h-4 w-4 text-gray-400" />
         </div>
         {renderProposal('chair')}
+      </div>
+
+      <div>
+        <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-gray-500">
+          <input
+            type="checkbox"
+            checked={hasUnit}
+            onChange={(event) => onChange({ ...value, unitId: event.target.checked ? (value.unitId ?? '') : null })}
+            className="h-4 w-4 accent-teal-600"
+          />
+          Incluir unidad (opcional)
+        </label>
+        {hasUnit && (
+          <input
+            type="text"
+            value={value.unitId ?? ''}
+            onChange={(event) => onChange({ ...value, unitId: event.target.value || null })}
+            placeholder="Ej: Unidad 1, Hematología, etc."
+            className="mt-2 w-full rounded-xl border-2 border-gray-200 bg-white px-4 py-3 text-sm font-medium text-gray-800 outline-none transition-colors focus:border-teal-500 disabled:bg-gray-100 disabled:text-gray-400"
+          />
+        )}
       </div>
     </div>
   );

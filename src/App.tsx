@@ -55,13 +55,45 @@ function App() {
       );
   }, []);
 
+  function startChallengeFromUrl(decodedChallenge: ChallengeData) {
+    if (!decodedChallenge.selection) {
+      setChallengeData(decodedChallenge);
+      setScreen('start');
+      return;
+    }
+
+    const challengeSelection: TaxonomySelection = {
+      universityId: decodedChallenge.selection.universityId,
+      subjectId: decodedChallenge.selection.subjectId,
+      partialId: decodedChallenge.selection.partialId || decodedChallenge.selection.chairId || '',
+      chairId: decodedChallenge.selection.chairId || decodedChallenge.selection.partialId || '',
+      unitId: decodedChallenge.selection.unitId ?? null,
+    };
+
+    setChallengeData(decodedChallenge);
+    setCurrentSelection(challengeSelection);
+    setPlayerName('Anónimo');
+    setQuestionsLoadError('');
+    setQuestionIndices(decodedChallenge.q);
+    setQuestions([]);
+    setScreen('game');
+  }
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+    const mode = params.get('mode');
     const c = params.get('c');
+
     if (c) {
       const decoded = decodeChallenge(c);
-      if (decoded) setChallengeData(decoded);
+      if (decoded) {
+        setChallengeData(decoded);
+        if (mode === 'challenge') {
+          startChallengeFromUrl(decoded);
+        }
+      }
     }
+
     void fetchTaxonomy();
     void fetchQuestionCount();
   }, [fetchTaxonomy, fetchQuestionCount]);
@@ -72,7 +104,16 @@ function App() {
     setQuestionsLoadError('');
 
     if (challengeData) {
-      setQuestionIndices(challengeData.q);
+      const safeIndices = Array.isArray(challengeData.q) && challengeData.q.length > 0 ? challengeData.q : [];
+      if (safeIndices.length === 0) {
+        setQuestions([]);
+        setQuestionIndices([]);
+        setQuestionsLoadError('El desafío recibido no incluye preguntas válidas.');
+        setScreen('start');
+        return;
+      }
+
+      setQuestionIndices(safeIndices);
       setQuestions([]);
       setScreen('game');
       return;
@@ -112,6 +153,8 @@ function App() {
     setQuestionIndices(loadedQuestions.map((_, i) => i));
     setScreen('game');
   };
+
+  const hasValidGameData = questions.length > 0 || questionIndices.length > 0;
 
   const handleFinish = (gameAnswers: AnswerRecord[]) => {
     setAnswers(gameAnswers);
@@ -160,12 +203,28 @@ function App() {
           questionsLoadError={questionsLoadError}
         />
       )}
-      {screen === 'game' && (
+      {screen === 'game' && hasValidGameData && (
         <GameScreen
           questions={questions.length > 0 ? questions : undefined}
           questionIndices={questionIndices}
           onFinish={handleFinish}
         />
+      )}
+
+      {screen === 'game' && !hasValidGameData && (
+        <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
+          <div className="max-w-md rounded-3xl bg-white p-8 text-center shadow-xl">
+            <p className="text-lg font-bold text-gray-800">No hay preguntas para iniciar la partida.</p>
+            <p className="mt-2 text-sm text-gray-500">Volvé al menú y elegí una materia o un desafío válido.</p>
+            <button
+              type="button"
+              onClick={() => setScreen('start')}
+              className="mt-4 rounded-xl bg-teal-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-teal-700"
+            >
+              Volver al inicio
+            </button>
+          </div>
+        </div>
       )}
       {screen === 'results' && (
         <ResultsScreen

@@ -15,6 +15,8 @@ export function QuestionSuggestionModal({ open, onClose, universities, subjects,
   const [universityId, setUniversityId] = useState('');
   const [subjectId, setSubjectId] = useState('');
   const [chairId, setChairId] = useState('');
+  const [hasUnit, setHasUnit] = useState(false);
+  const [unitName, setUnitName] = useState('');
   const [questionText, setQuestionText] = useState('');
   const [options, setOptions] = useState<string[]>(['', '', '', '']);
   const [correctOption, setCorrectOption] = useState(0);
@@ -37,6 +39,8 @@ export function QuestionSuggestionModal({ open, onClose, universities, subjects,
     setUniversityId('');
     setSubjectId('');
     setChairId('');
+    setHasUnit(false);
+    setUnitName('');
     setQuestionText('');
     setOptions(['', '', '', '']);
     setCorrectOption(0);
@@ -82,6 +86,7 @@ export function QuestionSuggestionModal({ open, onClose, universities, subjects,
         university_id: universityId,
         subject_id: subjectId,
         chair_id: chairId,
+        unit_name: hasUnit ? unitName.trim() || null : null,
         question_text: questionText.trim(),
         options: cleanOptions,
         correct_option: correctOption,
@@ -169,19 +174,44 @@ export function QuestionSuggestionModal({ open, onClose, universities, subjects,
               </div>
 
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1.5">Cátedra</label>
+                <label className="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1.5">Parcial</label>
                 <select
                   value={chairId}
                   disabled={!subjectId}
                   onChange={(event) => setChairId(event.target.value)}
                   className="w-full rounded-xl border-2 border-gray-200 px-3 py-3 text-sm text-gray-800 outline-none focus:border-teal-500 disabled:bg-gray-100 disabled:text-gray-400"
                 >
-                  <option value="">Elegí cátedra</option>
+                  <option value="">Elegí parcial</option>
                   {availableChairs.map((chair) => (
                     <option key={chair.id} value={chair.id}>{chair.name}</option>
                   ))}
                 </select>
               </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+              <label className="flex items-center gap-3 text-sm font-bold text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={hasUnit}
+                  onChange={(event) => {
+                    const next = event.target.checked;
+                    setHasUnit(next);
+                    if (!next) setUnitName('');
+                  }}
+                  className="h-4 w-4 accent-teal-600"
+                />
+                Agregar unidad (opcional)
+              </label>
+              {hasUnit && (
+                <input
+                  type="text"
+                  value={unitName}
+                  onChange={(event) => setUnitName(event.target.value)}
+                  placeholder="Ej: Unidad 1, Microbiología"
+                  className="mt-3 w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-sm text-gray-800 outline-none focus:border-teal-500"
+                />
+              )}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

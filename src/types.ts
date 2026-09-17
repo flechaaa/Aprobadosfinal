@@ -7,10 +7,19 @@ export interface Question {
   author_name?: string | null;
 }
 
+export interface ChallengeSelectionPayload {
+  universityId: string;
+  subjectId: string;
+  partialId: string;
+  chairId?: string;
+  unitId?: string | null;
+}
+
 export interface ChallengeData {
   q: number[];
   n: string;
   s: number;
+  selection?: ChallengeSelectionPayload;
 }
 
 export interface AnswerRecord {

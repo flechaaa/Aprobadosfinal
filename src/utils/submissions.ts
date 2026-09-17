@@ -7,6 +7,7 @@ export interface SubmissionInput {
   university: string;
   subject: string;
   chair: string;
+  unit?: string;
   sourceNotes?: string;
   materialType: MaterialType;
   file: File;
@@ -92,6 +93,7 @@ export async function uploadSubmission(input: SubmissionInput): Promise<void> {
     university: input.university.trim(),
     subject: input.subject.trim(),
     chair: input.chair.trim(),
+    unit: input.unit?.trim() || null,
     source_notes: input.sourceNotes?.trim() || null,
     material_type: input.materialType,
     file_url: fileUrl,

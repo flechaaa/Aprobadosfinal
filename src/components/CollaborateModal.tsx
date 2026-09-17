@@ -20,6 +20,8 @@ export function CollaborateModal({ open, onClose }: CollaborateModalProps) {
   const [university, setUniversity] = useState('');
   const [subject, setSubject] = useState('');
   const [chair, setChair] = useState('');
+  const [hasUnit, setHasUnit] = useState(false);
+  const [unit, setUnit] = useState('');
   const [sourceNotes, setSourceNotes] = useState('');
   const [materialType, setMaterialType] = useState<MaterialType>('apunte');
   const [file, setFile] = useState<File | null>(null);
@@ -75,6 +77,8 @@ export function CollaborateModal({ open, onClose }: CollaborateModalProps) {
     setUniversity('');
     setSubject('');
     setChair('');
+    setHasUnit(false);
+    setUnit('');
     setSourceNotes('');
     setMaterialType('apunte');
     setFile(null);
@@ -141,6 +145,7 @@ export function CollaborateModal({ open, onClose }: CollaborateModalProps) {
         university: university.trim(),
         subject: subject.trim(),
         chair: chair.trim(),
+        unit: hasUnit ? unit.trim() || undefined : undefined,
         sourceNotes: sourceNotes.trim() || undefined,
         materialType,
         file,
@@ -210,13 +215,41 @@ export function CollaborateModal({ open, onClose }: CollaborateModalProps) {
               />
 
               <AutocompleteField
-                label="Cátedra / Docente *"
+                label="Parcial *"
                 value={chair}
                 onChange={setChair}
                 suggestions={chairSuggestions}
-                placeholder="Ej: Cátedra 1 - Dr. Pérez"
+                placeholder="Ej: Primer parcial - Dr. Pérez"
                 maxLength={200}
               />
+
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                <label className="flex items-center gap-3 text-sm font-bold text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={hasUnit}
+                    onChange={(event) => {
+                      const next = event.target.checked;
+                      setHasUnit(next);
+                      if (!next) setUnit('');
+                    }}
+                    className="h-4 w-4 accent-teal-600"
+                  />
+                  Agregar unidad (opcional)
+                </label>
+                {hasUnit && (
+                  <div className="mt-3">
+                    <AutocompleteField
+                      label="Unidad"
+                      value={unit}
+                      onChange={setUnit}
+                      suggestions={[]}
+                      placeholder="Ej: Unidad 1, Bacterias"
+                      maxLength={200}
+                    />
+                  </div>
+                )}
+              </div>
 
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1.5">
