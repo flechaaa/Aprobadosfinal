@@ -177,7 +177,7 @@ export function ResultsScreen({
 
     const challengePayload = {
       q: questions,
-      n: playerAlias,
+      n: displayName,
       s: totalPoints,
       selection: selection
         ? {
@@ -208,7 +208,7 @@ export function ResultsScreen({
     url.searchParams.set('materia', shareMateria);
     url.searchParams.set('preguntero', sharePreguntero);
     url.searchParams.set('puntaje', String(totalPoints));
-    url.searchParams.set('jugador', playerAlias);
+    url.searchParams.set('jugador', displayName);
     return url.toString();
   };
 
@@ -228,7 +228,7 @@ export function ResultsScreen({
     const url = buildChallengeUrl();
     if (!url) return;
 
-    const previewTitle = `${playerAlias} obtuvo ${totalPoints} puntos en Aprobados`;
+    const previewTitle = `${displayName} obtuvo ${totalPoints} puntos en Aprobados`;
     const previewDescription = `${shareMateria} | ${sharePreguntero} | Puntaje: ${totalPoints}`;
     const previewImage = `https://dummyimage.com/1200x630/0f766e/ffffff.png&text=${encodeURIComponent(
       `Aprobados | ${shareMateria} | ${sharePreguntero} | ${totalPoints} puntos`,
@@ -256,7 +256,7 @@ export function ResultsScreen({
       }
       tag.setAttribute('content', content);
     });
-  }, [challengeId, playerAlias, questions, shareMateria, sharePreguntero, totalPoints]);
+  }, [challengeId, displayName, questions, shareMateria, sharePreguntero, totalPoints]);
 
   const playAudio = (url: string) => {
     try {
@@ -337,6 +337,7 @@ export function ResultsScreen({
 
   const hasRankingChair = Boolean(selection?.chairId && selection.chairId !== 'all');
   const effectiveRankingName = rankingPlayerName.trim();
+  const displayName = effectiveRankingName || playerAlias;
 
   const handleRankingNameSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -436,7 +437,7 @@ export function ResultsScreen({
                 key={i}
                 className={`text-2xl ${i < rating.stars ? 'text-amber-400' : 'text-gray-200'}`}
               >
-                â˜…
+                ★
               </span>
             ))}
           </div>
@@ -486,7 +487,7 @@ export function ResultsScreen({
               </div>
               <div className="text-xl font-bold text-gray-300 px-4">VS</div>
               <div className="text-center flex-1">
-                <p className="text-sm text-gray-500 font-medium">{playerName}</p>
+                <p className="text-sm text-gray-500 font-medium">{displayName}</p>
                 <p className="text-3xl font-bold text-gray-800">{totalPoints}</p>
                 <p className="text-xs text-gray-400">puntos</p>
               </div>
