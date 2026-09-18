@@ -1,5 +1,9 @@
 import { supabase } from '@/lib/supabase';
 import { ensureTaxonomyFromSubmission } from '@/utils/moderation';
+import { extractQuestionFromImage } from '@/utils/gemini';
+import { extractQuestionsFromFile } from '@/utils/gemini';
+import { fetchAndExtractText } from '@/utils/fileParser';
+import { deleteSubmission } from '@/utils/submissions';
 
 export type QuestionDifficulty = 'facil' | 'media' | 'dificil';
 
@@ -15,6 +19,9 @@ export interface QuestionSuggestionPayload {
   difficulty?: QuestionDifficulty;
   author_name?: string;
   status?: 'pending';
+  source_submission_id?: string | null;
+  source_file_url?: string | null;
+  source_storage_path?: string | null;
 }
 
 export interface QuestionSuggestionRecord {
@@ -31,6 +38,12 @@ export interface QuestionSuggestionRecord {
   author_name?: string | null;
   status: 'pending' | 'approved' | 'rejected';
   created_at: string;
+  source_submission_id?: string | null;
+  source_file_url?: string | null;
+  source_storage_path?: string | null;
+  source_submission_id?: string | null;
+  source_file_url?: string | null;
+  source_storage_path?: string | null;
   university_name?: string;
   subject_name?: string;
   chair_name?: string;
@@ -64,33 +77,147 @@ function normalizeApprovedQuestion(suggestion: QuestionSuggestionRecord) {
 }
 
 export async function submitQuestionSuggestion(payload: QuestionSuggestionPayload) {
-  const safeAuthorName = (payload.author_name?.trim() || 'Anónimo').slice(0, 80);
+  const safeQuestionText = payload.question_text.trim();
+  const safeOptions = payload.options.map((option) => option.trim());
+  const safeAuthorName = (payload.author_name?.trim() || 'AnÃ³nimo').slice(0, 80);
 
-  const { error } = await supabase.from('question_suggestions').insert([
-    {
-      university_id: payload.university_id,
-      subject_id: payload.subject_id,
-      chair_id: payload.chair_id,
-      unit_name: payload.unit_name?.trim() || null,
-      question_text: payload.question_text.trim(),
-      options: payload.options.map((option) => option.trim()),
-      correct_option: payload.correct_option,
-      explanation: payload.explanation?.trim() ?? null,
-      difficulty: payload.difficulty ?? 'media',
-      author_name: safeAuthorName,
-      status: 'pending',
-    },
-  ]);
-
-  if (error) {
-    throw new Error(error.message || 'No se pudo enviar la propuesta de pregunta.');
+  if (!payload.university_id || !payload.subject_id || !payload.chair_id) {
+    throw new Error('Seleccioná universidad, materia y cátedra antes de enviar.');
   }
+  if (safeQuestionText.length < 10) {
+    throw new Error('El enunciado debe tener al menos 10 caracteres.');
+  }
+  if (safeOptions.length !== 4 || safeOptions.some((option) => !option)) {
+    throw new Error('La propuesta debe incluir exactamente 4 opciones completas.');
+  }
+  if (!Number.isInteger(payload.correct_option) || payload.correct_option < 0 || payload.correct_option > 3) {
+    throw new Error('La respuesta correcta seleccionada no es válida.');
+  }
+
+  try {
+    const { error } = await supabase.from('question_suggestions').insert([
+      {
+        university_id: payload.university_id,
+        subject_id: payload.subject_id,
+        chair_id: payload.chair_id,
+        unit_name: payload.unit_name?.trim() || null,
+        question_text: safeQuestionText,
+        options: safeOptions,
+        correct_option: payload.correct_option,
+        explanation: payload.explanation?.trim() || null,
+        difficulty: payload.difficulty ?? 'media',
+        author_name: safeAuthorName,
+        status: 'pending',
+        source_submission_id: payload.source_submission_id ?? null,
+        source_file_url: payload.source_file_url ?? null,
+        source_storage_path: payload.source_storage_path ?? null,
+      },
+    ]);
+
+    if (error) {
+      if (error.code === '42501') {
+        throw new Error('No tenés permisos para enviar propuestas. Revisá la política RLS de question_suggestions.');
+      }
+      if (error.code === '23503') {
+        throw new Error('La universidad, materia o cátedra seleccionada ya no existe. Volvé a elegirlas.');
+      }
+      if (error.code === '23514') {
+        throw new Error('La propuesta contiene un valor no permitido. Revisá dificultad y respuesta correcta.');
+      }
+      if (error.code === '42703' || error.code === 'PGRST204') {
+        throw new Error('La base de datos no tiene actualizada la estructura de propuestas. Aplicá las migraciones pendientes.');
+      }
+      throw new Error(error.message || 'No se pudo enviar la propuesta de pregunta.');
+    }
+  } catch (error) {
+    if (error instanceof Error) throw error;
+    throw new Error('No se pudo enviar la propuesta de pregunta. Intentá nuevamente.');
+  }
+}
+
+export async function processImageSubmission(input: {
+  submissionId?: string;
+  storagePath?: string | null;
+  fileUrl: string;
+  fileType: string;
+  university: string;
+  subject: string;
+  chair: string;
+}): Promise<void> {
+  const question = await extractQuestionFromImage(input.fileUrl, input.fileType);
+  const taxonomy = await ensureTaxonomyFromSubmission(input);
+
+  await submitQuestionSuggestion({
+    university_id: taxonomy.universityId,
+    subject_id: taxonomy.subjectId,
+    chair_id: taxonomy.chairId,
+    question_text: question.pregunta,
+    options: question.opciones,
+    correct_option: question.correcta,
+    explanation: question.explicacion,
+    difficulty: 'media',
+    author_name: 'IA - revisar por administrador',
+    status: 'pending',
+    source_submission_id: input.submissionId ?? null,
+    source_file_url: input.fileUrl,
+    source_storage_path: input.storagePath ?? null,
+  });
+
+}
+
+export async function processTextSubmission(input: {
+  submissionId?: string;
+  text: string;
+  university: string;
+  subject: string;
+  chair: string;
+}): Promise<number> {
+  const result = await extractQuestionsFromFile(input.text);
+  if (result.error || result.questions.length === 0) {
+    throw new Error(result.error || 'La IA no encontró preguntas en el texto.');
+  }
+
+  const taxonomy = await ensureTaxonomyFromSubmission(input);
+  for (const question of result.questions) {
+    await submitQuestionSuggestion({
+      university_id: taxonomy.universityId,
+      subject_id: taxonomy.subjectId,
+      chair_id: taxonomy.chairId,
+      question_text: question.pregunta,
+      options: question.opciones,
+      correct_option: question.correcta,
+      explanation: question.explicacion,
+      difficulty: 'media',
+      author_name: 'IA - revisar por administrador',
+      status: 'pending',
+      source_submission_id: input.submissionId ?? null,
+      source_file_url: null,
+      source_storage_path: null,
+    });
+  }
+
+  return result.questions.length;
+}
+
+export async function processFileSubmission(input: {
+  submissionId?: string;
+  storagePath?: string | null;
+  fileUrl: string;
+  fileType: string;
+  university: string;
+  subject: string;
+  chair: string;
+}): Promise<number> {
+  const text = await fetchAndExtractText(input.fileUrl, input.fileType);
+  if (text.trim().length < 20) throw new Error('El archivo no contiene suficiente texto legible.');
+  const count = await processTextSubmission({ ...input, text });
+  return count;
 }
 
 export async function loadPendingQuestionSuggestions(): Promise<QuestionSuggestionRecord[]> {
   const { data: rows, error } = await supabase
     .from('question_suggestions')
-    .select('id, university_id, subject_id, chair_id, unit_name, question_text, options, correct_option, explanation, difficulty, author_name, status, created_at')
+    .select('id, university_id, subject_id, chair_id, unit_name, question_text, options, correct_option, explanation, difficulty, author_name, status, created_at, source_submission_id, source_file_url, source_storage_path')
     .eq('status', 'pending')
     .order('created_at', { ascending: false });
 
@@ -112,6 +239,26 @@ export async function loadPendingQuestionSuggestions(): Promise<QuestionSuggesti
     subject_name: subjectMap.get(row.subject_id) ?? 'Materia no encontrada',
     chair_name: chairMap.get(row.chair_id) ?? 'Cátedra no encontrada',
   })) as QuestionSuggestionRecord[];
+}
+
+export async function cleanupSuggestionSourceIfUnused(
+  suggestion: QuestionSuggestionRecord,
+  adminPassword: string,
+): Promise<void> {
+  if (!suggestion.source_submission_id) return;
+  const { count, error } = await supabase
+    .from('question_suggestions')
+    .select('id', { count: 'exact', head: true })
+    .eq('source_submission_id', suggestion.source_submission_id)
+    .eq('status', 'pending');
+  if (error || (count ?? 0) > 0) return;
+
+  await deleteSubmission(
+    suggestion.source_submission_id,
+    suggestion.source_file_url ?? null,
+    suggestion.source_storage_path,
+    adminPassword,
+  );
 }
 
 export async function approveQuestionSuggestion(suggestion: QuestionSuggestionRecord, adminPassword?: string) {

@@ -67,9 +67,12 @@ export interface Submission {
   subject: string;
   chair: string;
   source_notes?: string;
-  material_type: 'apunte' | 'preguntero_choice' | 'pregunta_respuesta';
-  file_url: string;
+  material_type: 'apunte' | 'preguntero_choice' | 'pregunta_respuesta' | 'texto';
+  file_url: string | null;
+  storage_path?: string | null;
   file_type: string;
   processed: boolean;
+  processing_status?: 'pendiente_procesamiento' | 'procesando' | 'procesado' | 'error';
+  processed_text?: string | null;
   extracted_questions?: Question[];
 }

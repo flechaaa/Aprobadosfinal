@@ -16,7 +16,12 @@ interface PlaySelectionModalProps {
 }
 
 function normalizeValue(value: string): string {
-  return value.trim().toLocaleLowerCase().replace(/\s+/g, ' ');
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLocaleLowerCase()
+    .replace(/\s+/g, ' ');
 }
 
 export function PlaySelectionModal({
@@ -41,14 +46,24 @@ export function PlaySelectionModal({
     [universities, universityName],
   );
 
-  const subjectId = useMemo(
+  const exactSubjectId = useMemo(
     () => subjects.find((s) => normalizeValue(s.name) === normalizeValue(subjectName) && s.university_id === universityId)?.id ?? '',
     [subjects, subjectName, universityId],
   );
 
-  const chairId = useMemo(
+  const subjectId = useMemo(
+    () => universityId && !subjectName.trim() ? 'all' : exactSubjectId,
+    [universityId, subjectName, exactSubjectId],
+  );
+
+  const exactChairId = useMemo(
     () => chairs.find((c) => normalizeValue(c.name) === normalizeValue(chairName) && c.subject_id === subjectId)?.id ?? '',
     [chairs, chairName, subjectId],
+  );
+
+  const chairId = useMemo(
+    () => subjectId === 'all' || (subjectId && !chairName.trim()) ? 'all' : exactChairId,
+    [subjectId, chairName, exactChairId],
   );
 
   const availableSubjects = useMemo(
@@ -57,7 +72,7 @@ export function PlaySelectionModal({
   );
 
   const availableChairs = useMemo(
-    () => chairs.filter((chair) => chair.subject_id === subjectId),
+    () => subjectId && subjectId !== 'all' ? chairs.filter((chair) => chair.subject_id === subjectId) : [],
     [chairs, subjectId],
   );
 
@@ -76,7 +91,7 @@ export function PlaySelectionModal({
   if (!open) return null;
 
   const isReady = Boolean(universityId && subjectId && chairId);
-  const startLabel = isReady ? 'Comenzar partida' : 'Completa Universidad, Materia y Parcial';
+  const startLabel = isReady ? 'Comenzar partida' : 'Elegi una universidad valida';
 
   const handleStart = () => {
     if (!isReady) return;
@@ -143,7 +158,7 @@ export function PlaySelectionModal({
             suggestions={availableChairs.map((chair) => chair.name)}
             placeholder="Ej: Primer Parcial"
             maxLength={200}
-            disabled={!subjectId}
+            disabled={!subjectId || subjectId === 'all'}
           />
 
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">

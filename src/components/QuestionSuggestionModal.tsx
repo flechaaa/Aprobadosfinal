@@ -63,6 +63,13 @@ export function QuestionSuggestionModal({ open, onClose, universities, subjects,
       return;
     }
 
+    const selectedSubject = subjects.find((subject) => subject.id === subjectId);
+    const selectedChair = chairs.find((chair) => chair.id === chairId);
+    if (!selectedSubject || selectedSubject.university_id !== universityId || !selectedChair || selectedChair.subject_id !== subjectId) {
+      setError('La clasificación seleccionada ya no es válida. Volvé a elegirla.');
+      return;
+    }
+
     if (!questionText.trim()) {
       setError('Escribí el enunciado de la pregunta.');
       return;

@@ -88,17 +88,21 @@ export interface Submission {
   chair: string;
   source_notes: string | null;
   material_type: string;
-  file_url: string;
+  file_url: string | null;
+  storage_path?: string | null;
   file_type: string;
   processed: boolean;
+  processing_status?: 'pendiente_procesamiento' | 'procesando' | 'procesado' | 'error';
+  processed_text?: string | null;
   extracted_questions?: any[];
 }
 
 export async function loadPendingSubmissions(): Promise<Submission[]> {
   const { data, error } = await supabase
     .from('submissions')
-    .select('id, created_at, university, subject, chair, source_notes, material_type, file_url, file_type, processed, extracted_questions')
+    .select('id, created_at, university, subject, chair, source_notes, material_type, file_url, storage_path, file_type, processed, processing_status, processed_text, extracted_questions')
     .or('processed.is.null,processed.eq.false')
+    .or('processing_status.eq.pendiente_procesamiento,processing_status.eq.error,processing_status.is.null')
     .order('created_at', { ascending: false });
 
   if (error) {
@@ -259,7 +263,7 @@ export async function markSubmissionProcessed(
 ): Promise<void> {
   const { error: updErr } = await supabase
     .from('submissions')
-    .update({ processed: true })
+    .update({ processed: true, processing_status: 'procesado' })
     .eq('id', submissionId);
 
   if (updErr && adminPassword) {
@@ -269,6 +273,32 @@ export async function markSubmissionProcessed(
     });
     if (rpcErr) throw new Error('No se pudo marcar el envío como completado.');
   }
+}
+
+export async function updateSubmissionProcessingStatus(
+  submissionId: string,
+  status: 'procesando' | 'procesado' | 'error',
+  adminPassword?: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from('submissions')
+    .update({ processing_status: status })
+    .eq('id', submissionId);
+
+  if (!error) return;
+
+  if (adminPassword) {
+    const { error: rpcError } = await supabase.rpc('admin_update_submission_processing_status', {
+      p_submission_id: submissionId,
+      p_status: status,
+      p_admin_password: adminPassword,
+    });
+    if (!rpcError) return;
+    console.warn('No se pudo actualizar el estado de procesamiento:', rpcError);
+    return;
+  }
+
+  console.warn('No se pudo actualizar el estado de procesamiento:', error);
 }
 
 /**

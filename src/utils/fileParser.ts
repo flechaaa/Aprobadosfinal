@@ -56,6 +56,19 @@ export async function parsePdf(buffer: ArrayBuffer): Promise<string> {
   return fullText.trim();
 }
 
+export async function parseDocx(buffer: ArrayBuffer): Promise<string> {
+  const zip = await JSZip.loadAsync(buffer);
+  const xmlContent = await zip.file('word/document.xml')?.async('text');
+  if (!xmlContent) return '';
+  return Array.from(xmlContent.matchAll(/<w:t[^>]*>(.*?)<\/w:t>/g))
+    .map((match) => match[1])
+    .join(' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .trim();
+}
+
 // Extrae texto directamente de un archivo local (File) seleccionado por el usuario
 export async function extractTextFromFileObject(file: File): Promise<string> {
   const lowerName = file.name.toLowerCase();
@@ -68,6 +81,10 @@ export async function extractTextFromFileObject(file: File): Promise<string> {
 
   if (lowerName.endsWith('.pptx') || file.type.includes('presentation')) {
     return await parsePptx(arrayBuffer);
+  }
+
+  if (lowerName.endsWith('.docx') || file.type.includes('wordprocessingml')) {
+    return await parseDocx(arrayBuffer);
   }
 
   if (lowerName.endsWith('.pdf') || file.type.includes('pdf')) {
@@ -97,6 +114,10 @@ export async function fetchAndExtractText(fileUrl: string, fileType: string): Pr
 
   if (lowerType.includes('pdf') || lowerUrl.endsWith('.pdf')) {
     return await parsePdf(arrayBuffer);
+  }
+
+  if (lowerType.includes('wordprocessingml') || lowerUrl.endsWith('.docx')) {
+    return await parseDocx(arrayBuffer);
   }
 
   return await response.text();

@@ -9,6 +9,13 @@ import type { TaxonomySelection } from '@/components/TaxonomyPicker';
 import { AdBanner } from './AdBanner';
 import { RankingModal } from '@/components/RankingModal';
 
+const RANKING_PLAYER_NAME_KEY = 'aprobados-ranking-player-name';
+const LOCAL_RANKING_KEY = 'aprobados-local-ranking';
+
+function isAnonymousPlayerName(name: string): boolean {
+  return !name.trim() || ['anonimo', 'anónimo'].includes(name.trim().toLocaleLowerCase());
+}
+
 interface ResultsScreenProps {
   answers: AnswerRecord[];
   questionIndices: number[];
@@ -65,23 +72,32 @@ export function ResultsScreen({
   const correctCount = answers.filter((a) => a.correct).length;
   const accuracyPercentage = answers.length ? Math.round((correctCount / answers.length) * 100) : 0;
   const approved = accuracyPercentage >= 60;
+  const challengeLost = challengeData !== null && totalPoints < challengeData.s;
   const animatedScore = useCountUp(totalPoints, 1200);
-  const [shareUrl, setShareUrl] = useState('');
   const [showWhatsAppMenu, setShowWhatsAppMenu] = useState(false);
   const playerAlias = playerName.trim() || 'Anónimo';
   const [savingScore, setSavingScore] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [rankingPlayerName, setRankingPlayerName] = useState(() => {
+    const savedName = localStorage.getItem(RANKING_PLAYER_NAME_KEY)?.trim();
+    return savedName || '';
+  });
+  const [namePromptOpen, setNamePromptOpen] = useState(() => {
+    const savedName = localStorage.getItem(RANKING_PLAYER_NAME_KEY)?.trim();
+    return !savedName || isAnonymousPlayerName(playerName);
+  });
   const [rankingOpen, setRankingOpen] = useState(false);
   const [rankingPosition, setRankingPosition] = useState<number | null>(null);
   const [downloadFallbackMessage, setDownloadFallbackMessage] = useState('');
   const [showFailureStamp, setShowFailureStamp] = useState(false);
   const storyCardRef = useRef<HTMLDivElement | null>(null);
-  const failAudioRef = useRef<HTMLAudioElement | null>(null);
   const failStampTimerRef = useRef<number | undefined>(undefined);
 
   const selectedUniversity = universities.find((u) => u.id === selection?.universityId)?.name ?? 'Universidad';
   const selectedSubject = subjects.find((s) => s.id === selection?.subjectId)?.name ?? 'Materia';
+  const shareMateria = selection ? selectedSubject : 'Partida rapida';
+  const sharePreguntero = selection ? (chairs.find((c) => c.id === selection?.chairId)?.name ?? 'Preguntero') : 'Preguntero general';
   const selectedChair = chairs.find((c) => c.id === selection?.chairId)?.name ?? 'Cátedra';
 
   const handleDownloadStory = async () => {
@@ -166,13 +182,19 @@ export function ResultsScreen({
 
     const encoded = encodeChallenge(challengePayload);
     const url = new URL(window.location.href);
-    url.search = `?mode=challenge&c=${encodeURIComponent(encoded)}`;
+    url.search = '';
+    url.searchParams.set('mode', 'challenge');
+    url.searchParams.set('c', encoded);
+    url.searchParams.set('materia', shareMateria);
+    url.searchParams.set('preguntero', sharePreguntero);
+    url.searchParams.set('puntaje', String(totalPoints));
+    url.searchParams.set('jugador', playerAlias);
     return url.toString();
   };
 
   const buildWhatsAppCombinedMessage = () => {
     const challengeUrl = buildChallengeUrl();
-    return `¡Hice ${totalPoints} puntos en Aprobados! 🎯 ¡Desafía a un amigo a superarlo! ${challengeUrl}`;
+    return `Mi resultado en Aprobados: ${shareMateria} - ${totalPoints} puntos. Desafia a un amigo: ${challengeUrl}`;
   };
 
   const handleWhatsAppDirect = () => {
@@ -181,11 +203,37 @@ export function ResultsScreen({
   };
 
   useEffect(() => {
-    const data: ChallengeData = { q: questionIndices, n: playerName, s: totalPoints };
-    const encoded = encodeChallenge(data);
-    const url = `${window.location.origin}${window.location.pathname}?c=${encoded}`;
-    setShareUrl(url);
-  }, [questionIndices, playerName, totalPoints]);
+    const url = buildChallengeUrl();
+
+    const previewTitle = `${playerAlias} obtuvo ${totalPoints} puntos en Aprobados`;
+    const previewDescription = `${shareMateria} | ${sharePreguntero} | Puntaje: ${totalPoints}`;
+    const previewImage = `https://dummyimage.com/1200x630/0f766e/ffffff.png&text=${encodeURIComponent(
+      `Aprobados | ${shareMateria} | ${sharePreguntero} | ${totalPoints} puntos`,
+    )}`;
+
+    document.title = previewTitle;
+    const metadata = [
+      ['og:title', previewTitle],
+      ['og:description', previewDescription],
+      ['og:url', url],
+      ['og:image', previewImage],
+      ['og:image:alt', previewDescription],
+      ['twitter:title', previewTitle],
+      ['twitter:description', previewDescription],
+      ['twitter:image', previewImage],
+    ];
+
+    metadata.forEach(([property, content]) => {
+      const attribute = property.startsWith('twitter:') ? 'name' : 'property';
+      let tag = document.head.querySelector(`meta[${attribute}="${property}"]`);
+      if (!tag) {
+        tag = document.createElement('meta');
+        tag.setAttribute(attribute, property);
+        document.head.appendChild(tag);
+      }
+      tag.setAttribute('content', content);
+    });
+  }, [playerAlias, questionIndices, shareMateria, sharePreguntero, totalPoints]);
 
   const playAudio = (url: string) => {
     try {
@@ -204,12 +252,6 @@ export function ResultsScreen({
   };
 
   const launchDefeatEffects = () => {
-    const audio = new Audio('https://www.myinstants.com/media/sounds/sadtrombone.mp3');
-    audio.volume = 0.8;
-    failAudioRef.current = audio;
-    void audio.play().catch(() => {
-      console.info('La reproducción automática bloqueada por el navegador para la derrota.');
-    });
 
     setShowFailureStamp(true);
     if (failStampTimerRef.current) {
@@ -218,16 +260,11 @@ export function ResultsScreen({
 
     failStampTimerRef.current = window.setTimeout(() => {
       setShowFailureStamp(false);
-      if (failAudioRef.current) {
-        failAudioRef.current.pause();
-        failAudioRef.current.currentTime = 0;
-        failAudioRef.current = null;
-      }
     }, 2600);
   };
 
   useEffect(() => {
-    if (approved) {
+    if (approved && !challengeLost) {
       launchVictoryEffects();
     } else {
       launchDefeatEffects();
@@ -237,21 +274,12 @@ export function ResultsScreen({
       if (failStampTimerRef.current) {
         clearTimeout(failStampTimerRef.current);
       }
-      if (failAudioRef.current) {
-        failAudioRef.current.pause();
-        failAudioRef.current.currentTime = 0;
-      }
     };
-  }, [approved]);
+  }, [approved, challengeLost]);
 
   const clearFailureEffects = () => {
     if (failStampTimerRef.current) {
       clearTimeout(failStampTimerRef.current);
-    }
-    if (failAudioRef.current) {
-      failAudioRef.current.pause();
-      failAudioRef.current.currentTime = 0;
-      failAudioRef.current = null;
     }
     setShowFailureStamp(false);
   };
@@ -284,8 +312,37 @@ export function ResultsScreen({
 
   const rating = getRating();
 
+  const hasRankingChair = Boolean(selection?.chairId && selection.chairId !== 'all');
+  const effectiveRankingName = rankingPlayerName.trim();
+
+  const handleRankingNameSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const name = String(formData.get('ranking-name') ?? '').trim().slice(0, 50);
+    if (!name || isAnonymousPlayerName(name)) return;
+
+    localStorage.setItem(RANKING_PLAYER_NAME_KEY, name);
+    setRankingPlayerName(name);
+    setNamePromptOpen(false);
+  };
+
   const handleSaveScore = useCallback(async () => {
-    if (!selection || !selection.chairId || selection.chairId === 'all') {
+    if (!effectiveRankingName || saveSuccess) {
+      return;
+    }
+
+    if (!hasRankingChair) {
+      let storedEntries: Array<{ id: string; player_name: string; score: number }> = [];
+      try {
+        storedEntries = JSON.parse(localStorage.getItem(LOCAL_RANKING_KEY) ?? '[]') as Array<{ id: string; player_name: string; score: number }>;
+      } catch {
+        storedEntries = [];
+      }
+      const newEntry = { id: `${Date.now()}-${Math.random()}`, player_name: effectiveRankingName, score: totalPoints };
+      const entries = [...storedEntries, newEntry].sort((left, right) => right.score - left.score);
+      localStorage.setItem(LOCAL_RANKING_KEY, JSON.stringify(entries));
+      setRankingPosition(entries.findIndex((entry) => entry.id === newEntry.id) + 1);
+      setSaveSuccess(true);
       return;
     }
 
@@ -302,8 +359,13 @@ export function ResultsScreen({
 
       const result = await saveRankingScore({
         chairId: taxonomy.chairId,
-        playerName: playerAlias,
+        playerName: effectiveRankingName,
         score: totalPoints,
+        universityId: taxonomy.universityId,
+        subjectId: taxonomy.subjectId,
+        unit: selection?.unitId ?? null,
+        correctAnswers: correctCount,
+        questionsAnswered: answers.length,
       });
 
       setRankingPosition(result.position);
@@ -318,7 +380,7 @@ export function ResultsScreen({
     } finally {
       setSavingScore(false);
     }
-  }, [onTaxonomyRefresh, playerAlias, selectedChair, selectedSubject, selectedUniversity, selection, totalPoints]);
+  }, [effectiveRankingName, hasRankingChair, onTaxonomyRefresh, saveSuccess, selectedChair, selectedSubject, selectedUniversity, selection, totalPoints]);
 
   useEffect(() => {
     void handleSaveScore();
@@ -326,16 +388,11 @@ export function ResultsScreen({
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-teal-50">
-      {!approved && showFailureStamp && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-red-950/25 pointer-events-none">
-          <div className="text-center">
-            <div className="relative">
-              <div className="font-black text-[14rem] leading-none text-red-600 drop-shadow-[0_0_80px_rgba(239,68,68,0.95)] transform scale-[1.12] animate-[zoom-in_600ms_ease-out]" style={{ fontFamily: 'Impact, Haettenschweiler, "Arial Black", sans-serif' }}>
-                F
-              </div>
-              <div className="absolute left-1/2 top-1/2 h-40 w-40 -translate-x-1/2 -translate-y-1/2 rounded-full border-4 border-red-300/60" />
-            </div>
-          </div>
+      {(!approved || challengeLost) && showFailureStamp && (
+        <div className="pointer-events-none fixed inset-x-0 bottom-6 z-40 flex justify-center px-4 animate-[toast-in_350ms_ease-out]">
+          <p className="rounded-full bg-teal-900/90 px-5 py-2 text-center text-sm font-bold text-white shadow-lg backdrop-blur-sm">
+            &iexcl;Intentalo de vuelta! &iexcl;Esta vez sale!
+          </p>
         </div>
       )}
 
@@ -430,7 +487,7 @@ export function ResultsScreen({
         )}
 
         {/* Story card preview */}
-        {selection && selection.chairId && selection.chairId !== 'all' && (
+        <>
           <div className="bg-white rounded-3xl shadow-xl p-4 mb-6">
             <div
               ref={storyCardRef}
@@ -449,7 +506,7 @@ export function ResultsScreen({
                   </div>
                   <div>
                     <p className="text-xs font-black uppercase tracking-[0.2em] text-teal-100">Aprobados</p>
-                    <h3 className="text-2xl font-black leading-tight">{selectedUniversity}</h3>
+                    <h3 className="text-2xl font-black leading-tight">{selectedUniversity || 'Aprobados'}</h3>
                   </div>
                 </div>
                 <div className="text-right">
@@ -461,11 +518,11 @@ export function ResultsScreen({
               <div className="relative z-10 mt-7">
                 <div className="inline-flex items-center gap-2 rounded-full bg-white/15 px-4 py-2 text-xs font-black uppercase tracking-wide">
                   <Trophy className="w-4 h-4" />
-                  {selectedSubject}
+                  {shareMateria}
                 </div>
                 <div className="mt-2">
                   <p className="text-xs font-black uppercase tracking-wide text-teal-100">Cátedra</p>
-                  <p className="text-lg font-black">{selectedChair}</p>
+                  <p className="text-lg font-black">{sharePreguntero}</p>
                 </div>
               </div>
 
@@ -507,16 +564,24 @@ export function ResultsScreen({
               </div>
             )}
           </div>
-        )}
+        </>
 
         {/* Ranking status */}
-        {selection && selection.chairId && selection.chairId !== 'all' && (
+        <div className="bg-white rounded-3xl shadow-xl p-6 mb-6">
           <div className="bg-white rounded-3xl shadow-xl p-6 mb-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-xs font-bold uppercase tracking-wide text-gray-500">Ranking</p>
                 <p className="text-sm font-semibold text-gray-700">
-                  {savingScore ? 'Guardando tu puntaje...' : saveSuccess ? 'Puntaje guardado automáticamente.' : 'El puntaje se guarda automáticamente.'}
+                  {!hasRankingChair
+                    ? saveSuccess
+                      ? 'Puntaje guardado en el ranking local de partidas rápidas.'
+                      : 'Guardá tu nombre para registrar este puntaje.'
+                    : savingScore
+                    ? 'Guardando tu puntaje...'
+                    : saveSuccess
+                    ? 'Puntaje guardado automáticamente.'
+                    : 'El puntaje se guarda automáticamente.'}
                 </p>
                 {saveError && <p className="mt-1 text-sm font-bold text-red-600">{saveError}</p>}
               </div>
@@ -532,7 +597,7 @@ export function ResultsScreen({
               </div>
             </div>
           </div>
-        )}
+        </div>
 
         {/* Answer review */}
         <div className="bg-white rounded-3xl shadow-xl p-6 mb-6">
@@ -594,7 +659,29 @@ export function ResultsScreen({
           </button>
         </div>
 
-        <RankingModal open={rankingOpen} chairId={selection?.chairId ?? null} chairs={chairs} onClose={() => setRankingOpen(false)} />
+        {namePromptOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 px-4">
+            <form onSubmit={handleRankingNameSubmit} className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
+              <h2 className="text-xl font-extrabold text-gray-900">Guardá tu lugar en el ranking</h2>
+              <p className="mt-2 text-sm text-gray-600">Ingresá un nombre o apodo para registrar tu puntaje.</p>
+              <input
+                name="ranking-name"
+                type="text"
+                defaultValue={!isAnonymousPlayerName(playerName) ? playerName : ''}
+                autoFocus
+                maxLength={50}
+                required
+                placeholder="Tu nombre o apodo"
+                className="mt-4 w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-sm text-gray-800 outline-none focus:border-teal-500"
+              />
+              <button type="submit" className="mt-4 w-full rounded-xl bg-teal-600 px-4 py-3 font-bold text-white hover:bg-teal-700">
+                Guardar puntaje
+              </button>
+            </form>
+          </div>
+        )}
+
+        <RankingModal open={rankingOpen} chairId={hasRankingChair ? selection?.chairId ?? null : null} chairs={chairs} universities={universities} subjects={subjects} onClose={() => setRankingOpen(false)} />
 
         {/* Ad banner */}
         <AdBanner />

@@ -11,8 +11,8 @@ const QUESTION_FIELDS = 'question, options, correct_option, explanation, chair_i
 
 type QuestionFilter = {
   column: 'chair_id' | 'subject_id';
-  operator: 'eq';
-  value: string;
+  operator: 'eq' | 'in';
+  value: string | string[];
 };
 
 function parseQuestionOptions(value: unknown): string[] {
@@ -54,7 +54,9 @@ function serializeQuestion(row: SupabaseQuestionRow): Question | null {
 async function queryQuestionRows(filter?: QuestionFilter): Promise<SupabaseQuestionRow[]> {
   let query = supabase.from('questions').select(QUESTION_FIELDS).eq('is_active', true);
   if (filter) {
-    query = query.eq(filter.column, filter.value);
+    query = filter.operator === 'in'
+      ? query.in(filter.column, filter.value as string[])
+      : query.eq(filter.column, filter.value as string);
   }
 
   const { data, error } = await query;
@@ -64,6 +66,28 @@ async function queryQuestionRows(filter?: QuestionFilter): Promise<SupabaseQuest
   }
 
   return Array.isArray(data) ? (data as unknown as SupabaseQuestionRow[]) : [];
+}
+
+async function queryChairIdsForSelection(selection: {
+  universityId: string;
+  subjectId: string;
+}): Promise<string[]> {
+  let subjectQuery = supabase.from('subjects').select('id').eq('university_id', selection.universityId);
+  if (selection.subjectId !== 'all') {
+    subjectQuery = subjectQuery.eq('id', selection.subjectId);
+  }
+
+  const { data: subjects, error: subjectsError } = await subjectQuery;
+  if (subjectsError || !subjects?.length) return [];
+
+  const subjectIds = subjects.map((subject) => subject.id);
+  const { data: chairs, error: chairsError } = await supabase
+    .from('chairs')
+    .select('id')
+    .in('subject_id', subjectIds);
+
+  if (chairsError) return [];
+  return (chairs ?? []).map((chair) => chair.id);
 }
 
 export function getAllQuestions(): Question[] {
@@ -78,34 +102,35 @@ export function getAllQuestions(): Question[] {
 export async function loadQuestionsForGame(selection: {
   universityId: string;
   subjectId: string;
-  chairId: string;
+  chairId?: string;
 }): Promise<Question[]> {
   try {
+    const chairId = selection.chairId || 'all';
     console.log('[loadQuestionsForGame] filtros de entrada:', {
-      chair_id: selection.chairId || null,
+      chair_id: chairId,
       subject_id: selection.subjectId || null,
       university_id: selection.universityId || null,
     });
 
     let questionsData: SupabaseQuestionRow[] = [];
     // 1) Si el árbol ya trae una cátedra exacta, consultamos sólo por ese chair_id.
-    if (selection.chairId && selection.chairId !== 'all') {
-      const data = await queryQuestionRows({ column: 'chair_id', operator: 'eq', value: selection.chairId });
+    if (chairId !== 'all') {
+      const data = await queryQuestionRows({ column: 'chair_id', operator: 'eq', value: chairId });
 
       if (data.length > 0) {
         questionsData = data;
-        console.log('[loadQuestionsForGame] coincidencias exactas por chair_id:', selection.chairId, data.length);
+        console.log('[loadQuestionsForGame] coincidencias exactas por chair_id:', chairId, data.length);
       } else {
-        console.warn('[loadQuestionsForGame] sin coincidencias exactas por chair_id=', selection.chairId);
+        console.warn('[loadQuestionsForGame] sin coincidencias exactas por chair_id=', chairId);
       }
     }
 
     // 2) Si no apareció el chair_id directo, resolve el subject_id a su nombre
     //    y hacemos un filtro de materia estricto, con una rama exclusiva para Infectología.
-    if (questionsData.length === 0 && selection.subjectId) {
-      const subjectIdQuestions = await queryQuestionRows({ column: 'subject_id', operator: 'eq', value: selection.subjectId });
-      if (subjectIdQuestions.length > 0) {
-        questionsData = subjectIdQuestions;
+    if (questionsData.length === 0 && chairId === 'all' && selection.universityId && selection.subjectId) {
+      const chairIds = await queryChairIdsForSelection(selection);
+      if (chairIds.length > 0) {
+        questionsData = await queryQuestionRows({ column: 'chair_id', operator: 'in', value: chairIds });
       }
     }
 
@@ -125,7 +150,7 @@ export async function loadQuestionsForGame(selection: {
   const selectionSummary = {
     universityId: selection.universityId,
     subjectId: selection.subjectId,
-    chairId: selection.chairId,
+    chairId: selection.chairId || 'all',
   };
   console.error('[loadQuestionsForGame] No había preguntas en Supabase para este filtro. No se usó el fallback local de infectología.', selectionSummary);
 

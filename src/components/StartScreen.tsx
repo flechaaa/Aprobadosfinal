@@ -158,7 +158,7 @@ export function StartScreen({ onStart, onQuickGame, challengeData, universities,
         onStart={handleStartWithSelection}
       />
 
-      <RankingModal open={rankingOpen} chairId={null} chairs={chairs} onClose={() => setRankingOpen(false)} />
+      <RankingModal open={rankingOpen} chairId={null} chairs={chairs} universities={universities} subjects={subjects} onClose={() => setRankingOpen(false)} />
       <CollaborateModal open={collaborateOpen} onClose={() => setCollaborateOpen(false)} />
       <QuestionSuggestionModal
         open={questionSuggestionOpen}

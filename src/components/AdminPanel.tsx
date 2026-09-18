@@ -25,14 +25,15 @@ import {
   insertQuestion,
   insertBatchQuestions,
   markSubmissionProcessed,
+  updateSubmissionProcessingStatus,
   ensureTaxonomyFromSubmission,
   type Submission,
 } from '@/utils/moderation';
-import { extractQuestionsFromFile } from '@/utils/gemini';
+import { extractQuestionFromImage, extractQuestionsFromFile } from '@/utils/gemini';
 import { fetchAndExtractText } from '@/utils/fileParser';
 import { deleteSubmission } from '@/utils/submissions';
 import { sendApprovedSubmissionPushNotification } from '@/utils/notifications';
-import { loadPendingQuestionSuggestions, approveQuestionSuggestion, rejectQuestionSuggestion } from '@/utils/questionSuggestions';
+import { cleanupSuggestionSourceIfUnused, loadPendingQuestionSuggestions, approveQuestionSuggestion, rejectQuestionSuggestion, processFileSubmission, processImageSubmission, processTextSubmission } from '@/utils/questionSuggestions';
 import type { Question, TaxonomySuggestion } from '@/types';
 
 interface AdminPanelProps {
@@ -41,6 +42,18 @@ interface AdminPanelProps {
 
 interface EditableQuestion extends Question {
   approved: boolean;
+}
+
+const AUTO_PROCESS_DELAY_MS = 20_000;
+const QUOTA_COOLDOWN_MS = 30_000;
+
+function waitForProcessingQueue(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isGeminiQuotaError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.includes('429') || message.includes('RESOURCE_EXHAUSTED') || message.toLocaleLowerCase().includes('cuota de gemini');
 }
 
 interface QuestionReport {
@@ -99,9 +112,11 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [questions, setQuestions] = useState<EditableQuestion[]>([]);
   const [extracting, setExtracting] = useState(false);
+  const [processingImage, setProcessingImage] = useState(false);
   const [extractError, setExtractError] = useState('');
   const [progressMsg, setProgressMsg] = useState('');
   const [approvingAll, setApprovingAll] = useState(false);
+  const [autoProcessingIds, setAutoProcessingIds] = useState<string[]>([]);
 
   // Reports state
   const [reports, setReports] = useState<QuestionReport[]>([]);
@@ -155,7 +170,6 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
       setPasswordInput('');
       setSuggestions(pending);
       setUnlocked(true);
-      void refreshSubmissions();
       void fetchReports();
       void fetchQuestionSuggestions();
     } catch {
@@ -181,6 +195,65 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
     try {
       const pending = await loadPendingSubmissions();
       setSubmissions(pending);
+      const pendingImages = pending.filter((submission) =>
+        (Boolean(submission.file_url) || submission.material_type === 'texto') &&
+        (submission.processing_status === 'pendiente_procesamiento' || submission.processing_status === 'error' || !submission.processing_status),
+      );
+      if (pendingImages.length > 0) {
+        setAutoProcessingIds(pendingImages.map((submission) => submission.id));
+        for (const [index, submission] of pendingImages.entries()) {
+          let quotaError = false;
+          try {
+            await updateSubmissionProcessingStatus(submission.id, 'procesando', adminPassword);
+            if (submission.material_type === 'texto') {
+              await processTextSubmission({
+                submissionId: submission.id,
+                text: submission.processed_text ?? '',
+                university: submission.university,
+                subject: submission.subject,
+                chair: submission.chair,
+              });
+            } else if (submission.file_url && submission.file_type.startsWith('image/')) {
+              await processImageSubmission({
+                submissionId: submission.id,
+                storagePath: submission.storage_path,
+                fileUrl: submission.file_url,
+                fileType: submission.file_type,
+                university: submission.university,
+                subject: submission.subject,
+                chair: submission.chair,
+              });
+            } else if (submission.file_url) {
+              await processFileSubmission({
+                submissionId: submission.id,
+                storagePath: submission.storage_path,
+                fileUrl: submission.file_url,
+                fileType: submission.file_type,
+                university: submission.university,
+                subject: submission.subject,
+                chair: submission.chair,
+              });
+            } else {
+              throw new Error('El envío no tiene contenido procesable.');
+            }
+            await markSubmissionProcessed(submission.id, adminPassword);
+            setSubmissions((current) => current.filter((item) => item.id !== submission.id));
+            void fetchQuestionSuggestions();
+            setMessage('Imagen procesada y enviada a pendientes de aprobación.');
+          } catch (error) {
+            quotaError = isGeminiQuotaError(error);
+            await updateSubmissionProcessingStatus(submission.id, 'error', adminPassword);
+            console.warn('No se pudo procesar automÃ¡ticamente el aporte. ContinÃºa la cola:', error);
+          } finally {
+            setAutoProcessingIds((current) => current.filter((id) => id !== submission.id));
+          }
+          if (index < pendingImages.length - 1) {
+            const delay = quotaError ? QUOTA_COOLDOWN_MS : AUTO_PROCESS_DELAY_MS;
+            console.info(`[AI] Pausa de ${Math.ceil(delay / 1000)}s antes del siguiente aporte.`);
+            await waitForProcessingQueue(delay);
+          }
+        }
+      }
       if (pending.length > 0 && !selectedId) {
         selectSubmission(pending[0]);
       }
@@ -191,7 +264,7 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
     } catch {
       setMessage('No se pudieron cargar los envíos.');
     }
-  }, [selectedId]);
+  }, [adminPassword, fetchQuestionSuggestions, selectedId]);
 
   useEffect(() => {
     if (unlocked) {
@@ -288,6 +361,7 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
     setMessage('');
     try {
       await approveQuestionSuggestion(suggestion, adminPassword);
+      await cleanupSuggestionSourceIfUnused(suggestion, adminPassword);
       setQuestionSuggestions((current) => current.filter((item) => item.id !== suggestion.id));
       setMessage('Pregunta propuesta aprobada y publicada.');
     } catch (err: any) {
@@ -297,12 +371,13 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
     }
   };
 
-  const handleRejectQuestionSuggestion = async (suggestionId: string) => {
+  const handleRejectQuestionSuggestion = async (suggestion: QuestionSuggestionRecord) => {
     setBusy(true);
     setMessage('');
     try {
-      await rejectQuestionSuggestion(suggestionId);
-      setQuestionSuggestions((current) => current.filter((item) => item.id !== suggestionId));
+      await rejectQuestionSuggestion(suggestion.id);
+      await cleanupSuggestionSourceIfUnused(suggestion, adminPassword);
+      setQuestionSuggestions((current) => current.filter((item) => item.id !== suggestion.id));
       setMessage('Propuesta de pregunta rechazada.');
     } catch (err: any) {
       setMessage(err?.message || 'No se pudo rechazar la propuesta.');
@@ -402,7 +477,7 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
   };
 
   const handleExtract = async () => {
-    if (!selected) return;
+    if (!selected || !selected.file_url) return;
     setExtracting(true);
     setExtractError('');
     setProgressMsg('Leyendo archivo y extrayendo texto...');
@@ -443,6 +518,25 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
     }
   };
 
+  const handleProcessImage = async () => {
+    if (!selected || !selected.file_url || !selected.file_type.startsWith('image/')) return;
+
+    setProcessingImage(true);
+    setExtractError('');
+    setProgressMsg('Analizando la diapositiva con IA...');
+    try {
+      const question = await extractQuestionFromImage(selected.file_url, selected.file_type);
+      const nextQuestion = { ...question, approved: false };
+      setQuestions([nextQuestion]);
+      setMessage('Pregunta autocompletada. Revisala antes de aprobarla.');
+    } catch (error) {
+      setExtractError(error instanceof Error ? error.message : 'No se pudo procesar la imagen con IA.');
+    } finally {
+      setProcessingImage(false);
+      setProgressMsg('');
+    }
+  };
+
   const handleRejectSubmission = async () => {
     if (!selected) return;
     const confirmDelete = window.confirm(
@@ -453,7 +547,7 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
     setBusy(true);
     setMessage('');
     try {
-      await deleteSubmission(selected.id, selected.file_url);
+      await deleteSubmission(selected.id, selected.file_url, selected.storage_path, adminPassword);
       const remaining = submissions.filter((s) => s.id !== selected.id);
       setSubmissions(remaining);
       if (remaining.length > 0) {
@@ -465,6 +559,46 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
       setMessage('Material descartado y eliminado con éxito.');
     } catch (err: any) {
       setMessage(err.message || 'No se pudo eliminar el material.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleDismiss = async (submission: Submission) => {
+    const confirmed = window.confirm(`¿Querés desestimar y eliminar el envío de "${submission.subject}"?`);
+    if (!confirmed) return;
+
+    const previousSubmissions = submissions;
+    const remaining = submissions.filter((item) => item.id !== submission.id);
+    setSubmissions(remaining);
+    if (selectedId === submission.id) {
+      const next = remaining[0];
+      if (next) selectSubmission(next);
+      else {
+        setSelectedId(null);
+        setQuestions([]);
+      }
+    }
+
+    setBusy(true);
+    setMessage('');
+    try {
+      if (submission.file_url || submission.storage_path) await deleteSubmission(submission.id, submission.file_url, submission.storage_path, adminPassword);
+      const remaining = submissions.filter((item) => item.id !== submission.id);
+      setSubmissions(remaining);
+      if (selectedId === submission.id) {
+        if (remaining.length > 0) {
+          selectSubmission(remaining[0]);
+        } else {
+          setSelectedId(null);
+          setQuestions([]);
+        }
+      }
+      setMessage('Material desestimado y eliminado correctamente.');
+    } catch (error) {
+      setSubmissions(previousSubmissions);
+      if (selectedId === submission.id) selectSubmission(submission);
+      setMessage(error instanceof Error ? error.message : 'No se pudo desestimar el material.');
     } finally {
       setBusy(false);
     }
@@ -911,7 +1045,7 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
                         </button>
                         <button
                           type="button"
-                          onClick={() => void handleRejectQuestionSuggestion(suggestion.id)}
+                          onClick={() => void handleRejectQuestionSuggestion(suggestion)}
                           disabled={busy}
                           className="rounded-xl bg-red-50 px-3 py-2 text-xs font-black text-red-700 hover:bg-red-100 disabled:opacity-50"
                         >
@@ -930,24 +1064,41 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
       {/* Materials tab */}
       {tab === 'materials' && (
         <div className="flex-1 flex flex-col overflow-hidden">
+          {autoProcessingIds.length > 0 && (
+            <div className="flex items-center gap-2 border-b border-emerald-100 bg-emerald-50 px-4 py-2 text-xs font-bold text-emerald-700">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Procesando nuevos aportes con IA...
+            </div>
+          )}
           {submissions.length > 0 && (
             <div className="bg-white border-b border-gray-200 px-4 py-2.5 flex items-center gap-2 overflow-x-auto scrollbar-hide">
               <span className="text-xs font-bold uppercase tracking-wide text-gray-400 flex-shrink-0">Pendientes:</span>
               {submissions.map((s) => (
-                <button
-                  key={s.id}
-                  onClick={() => selectSubmission(s)}
-                  className={`flex-shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
-                    s.id === selectedId ? 'bg-teal-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
-                >
-                  {s.subject} — {s.chair}
-                  {s.extracted_questions && s.extracted_questions.length > 0 && (
-                    <span className="ml-1.5 rounded-full bg-white/20 px-1.5 py-0.2 text-[10px]">
-                      {s.extracted_questions.length}
-                    </span>
-                  )}
-                </button>
+                <div key={s.id} className="flex flex-shrink-0 items-center gap-1 rounded-lg bg-gray-100 pl-3 text-xs font-semibold text-gray-600">
+                  <button
+                    type="button"
+                    onClick={() => selectSubmission(s)}
+                    className={`rounded-lg py-1.5 pr-1 text-left transition ${s.id === selectedId ? 'text-teal-700' : 'hover:text-teal-700'}`}
+                  >
+                    {s.subject} — {s.chair}
+                    {autoProcessingIds.includes(s.id) && (
+                      <span className="ml-1.5 text-[10px] font-bold text-emerald-600">Procesando IA...</span>
+                    )}
+                    {s.extracted_questions && s.extracted_questions.length > 0 && (
+                      <span className="ml-1.5 rounded-full bg-white px-1.5 py-0.2 text-[10px]">{s.extracted_questions.length}</span>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleDismiss(s)}
+                    disabled={busy}
+                    aria-label={`Desestimar ${s.subject}`}
+                    title="Desestimar y eliminar"
+                    className="rounded-md p-1.5 text-red-500 transition hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               ))}
             </div>
           )}
@@ -970,17 +1121,20 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
                       <span className="text-sm font-bold text-gray-800">{selected.subject}</span>
                       <span className="text-xs text-gray-400">·</span>
                       <span className="text-xs text-gray-500">{materialTypeLabels[selected.material_type] ?? selected.material_type}</span>
+                      <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700">
+                        {selected.processing_status ?? (selected.processed ? 'procesado' : 'pendiente_procesamiento')}
+                      </span>
                     </div>
 
                     <div className="flex items-center gap-3">
-                      <a
+                      {selected.file_url && <a
                         href={selected.file_url}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="flex items-center gap-1 text-xs font-bold text-teal-600 hover:text-teal-700"
                       >
                         <ExternalLink className="h-3.5 w-3.5" /> Abrir en pestaña
-                      </a>
+                      </a>}
                       <button
                         onClick={() => void handleRejectSubmission()}
                         disabled={busy}
@@ -998,14 +1152,18 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
                   </div>
                 </div>
                 <div className="flex-1 overflow-hidden p-2">
-                  {selected.file_type.startsWith('image/') ? (
+                  {selected.material_type === 'texto' ? (
+                    <div className="h-full overflow-y-auto rounded-lg bg-white p-4 text-sm whitespace-pre-wrap text-gray-700">{selected.processed_text}</div>
+                  ) : selected.file_url && selected.file_type.startsWith('image/') ? (
                     <img src={selected.file_url} alt="Material" className="w-full h-full object-contain rounded-lg" />
-                  ) : (
+                  ) : selected.file_url ? (
                     <iframe
                       src={selected.file_url}
                       title="Visor de documento"
                       className="w-full h-full rounded-lg border border-gray-200 bg-white"
                     />
+                  ) : (
+                    <div className="flex h-full items-center justify-center rounded-lg bg-white p-6 text-center text-sm text-gray-500">Este envío no tiene archivo asociado.</div>
                   )}
                 </div>
               </div>
@@ -1015,7 +1173,7 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => void handleExtract()}
-                      disabled={extracting}
+                      disabled={extracting || processingImage}
                       className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 py-3.5 font-bold text-white transition-all hover:from-teal-700 hover:to-emerald-700 active:scale-[0.98] shadow-lg disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {extracting ? (
@@ -1024,6 +1182,17 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
                         <><Sparkles className="h-5 w-5" /> {questions.length > 0 ? 'Volver a extraer con IA' : 'Extraer Preguntas con IA'}</>
                       )}
                     </button>
+                    {selected.file_type.startsWith('image/') && (
+                      <button
+                        type="button"
+                        onClick={() => void handleProcessImage()}
+                        disabled={extracting || processingImage}
+                        className="flex items-center justify-center gap-2 rounded-xl border-2 border-emerald-200 bg-white px-4 py-3.5 font-bold text-emerald-700 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {processingImage ? <Loader2 className="h-5 w-5 animate-spin" /> : <Sparkles className="h-5 w-5" />}
+                        {processingImage ? 'Procesando...' : 'Procesar con IA'}
+                      </button>
+                    )}
                   </div>
 
                   {extractError && (

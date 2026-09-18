@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Upload, X, FileText, CheckCircle2, AlertCircle, Loader2, Bell } from 'lucide-react';
-import { uploadSubmission, validateFile, type MaterialType } from '@/utils/submissions';
+import { submitTextSubmission, uploadSubmissions, validateFile, type MaterialType } from '@/utils/submissions';
 import { notificationSupported, requestNotificationPermission, registerBrowserPushSubscription, getOrCreateSessionId } from '@/utils/notifications';
 import { supabase } from '@/lib/supabase';
 import { AutocompleteField } from '@/components/AutocompleteField';
@@ -14,6 +14,7 @@ const MATERIAL_OPTIONS: { value: MaterialType; label: string; description: strin
   { value: 'apunte', label: 'Apunte / Resumen teórico', description: 'Resúmenes, teoría, esquemas' },
   { value: 'preguntero_choice', label: 'Preguntero / Choice ya armado', description: 'Preguntas múltiples choice' },
   { value: 'pregunta_respuesta', label: 'Preguntas con Respuesta modelo', description: 'Preguntas abiertas con respuesta' },
+  { value: 'texto', label: 'Texto directo de WhatsApp', description: 'Pegá preguntas copiadas de un chat' },
 ];
 
 export function CollaborateModal({ open, onClose }: CollaborateModalProps) {
@@ -24,7 +25,8 @@ export function CollaborateModal({ open, onClose }: CollaborateModalProps) {
   const [unit, setUnit] = useState('');
   const [sourceNotes, setSourceNotes] = useState('');
   const [materialType, setMaterialType] = useState<MaterialType>('apunte');
-  const [file, setFile] = useState<File | null>(null);
+  const [textContent, setTextContent] = useState('');
+  const [files, setFiles] = useState<File[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -33,6 +35,17 @@ export function CollaborateModal({ open, onClose }: CollaborateModalProps) {
   const [notifyWhenApproved, setNotifyWhenApproved] = useState(false);
   const [notifyStatus, setNotifyStatus] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const previewUrls = useMemo(
+    () => files.map((file) => (file.type.startsWith('image/') ? URL.createObjectURL(file) : null)),
+    [files],
+  );
+
+  useEffect(() => () => {
+    previewUrls.forEach((url) => {
+      if (url) URL.revokeObjectURL(url);
+    });
+  }, [previewUrls]);
 
   // Estados de taxonomía inteligente
   const [universities, setUniversities] = useState<{ id: string; name: string }[]>([]);
@@ -81,7 +94,8 @@ export function CollaborateModal({ open, onClose }: CollaborateModalProps) {
     setUnit('');
     setSourceNotes('');
     setMaterialType('apunte');
-    setFile(null);
+    setTextContent('');
+    setFiles([]);
     setProgress(0);
     setSuccess(false);
     setError('');
@@ -93,26 +107,28 @@ export function CollaborateModal({ open, onClose }: CollaborateModalProps) {
     onClose();
   }, [uploading, resetForm, onClose]);
 
-  const handleFile = useCallback((f: File) => {
-    const validationError = validateFile(f);
-    if (validationError) {
-      setError(validationError);
-      setFile(null);
+  const handleFiles = useCallback((selectedFiles: File[]) => {
+    const invalidFile = selectedFiles.map((file) => ({ file, error: validateFile(file) })).find((item) => item.error);
+    if (invalidFile?.error) {
+      setError(`${invalidFile.file.name}: ${invalidFile.error}`);
       return;
     }
     setError('');
-    setFile(f);
+    setFiles((current) => {
+      const merged = [...current, ...selectedFiles];
+      return merged.filter((file, index, all) => all.findIndex((candidate) => candidate.name === file.name && candidate.size === file.size && candidate.lastModified === file.lastModified) === index);
+    });
   }, []);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setDragOver(false);
-    const f = e.dataTransfer.files?.[0];
-    if (f) handleFile(f);
-  }, [handleFile]);
+    handleFiles(Array.from(e.dataTransfer.files ?? []));
+  }, [handleFiles]);
 
   const handleSubmit = async () => {
-    if (!university.trim() || !subject.trim() || !chair.trim() || !file) {
+    const isTextSubmission = materialType === 'texto';
+    if (!university.trim() || !subject.trim() || !chair.trim() || (isTextSubmission ? textContent.trim().length < 20 : files.length === 0)) {
       setError('Completá los campos obligatorios y adjuntá un archivo.');
       return;
     }
@@ -141,15 +157,27 @@ export function CollaborateModal({ open, onClose }: CollaborateModalProps) {
         }
       }
 
-      await uploadSubmission({
+      if (isTextSubmission) {
+        await submitTextSubmission({
+          university: university.trim(),
+          subject: subject.trim(),
+          chair: chair.trim(),
+          unit: hasUnit ? unit.trim() || undefined : undefined,
+          sourceNotes: sourceNotes.trim() || undefined,
+          materialType,
+          text: textContent,
+        });
+      } else {
+        await uploadSubmissions({
         university: university.trim(),
         subject: subject.trim(),
         chair: chair.trim(),
         unit: hasUnit ? unit.trim() || undefined : undefined,
         sourceNotes: sourceNotes.trim() || undefined,
         materialType,
-        file,
-      });
+          files,
+        });
+      }
       clearInterval(progressInterval);
       setProgress(100);
       setSuccess(true);
@@ -314,9 +342,9 @@ export function CollaborateModal({ open, onClose }: CollaborateModalProps) {
               </div>
 
               {/* Drag & Drop */}
-              <div>
+              <div className={materialType === 'texto' ? 'hidden' : ''}>
                 <label className="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">
-                  Archivo (PDF, PPTX, PNG, JPG, DOCX, TXT) *
+                   Archivos (PDF, PPTX, PNG, JPG, DOCX, TXT) *
                 </label>
                 <div
                   onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
@@ -326,7 +354,7 @@ export function CollaborateModal({ open, onClose }: CollaborateModalProps) {
                   className={`rounded-xl border-2 border-dashed p-6 text-center cursor-pointer transition-all ${
                     dragOver
                       ? 'border-teal-500 bg-teal-50'
-                      : file
+                      : files.length > 0
                       ? 'border-teal-400 bg-teal-50/50'
                       : 'border-gray-300 hover:border-teal-400 hover:bg-gray-50'
                   }`}
@@ -334,15 +362,28 @@ export function CollaborateModal({ open, onClose }: CollaborateModalProps) {
                   <input
                     ref={inputRef}
                     type="file"
+                    multiple
                     accept=".pdf,.pptx,.docx,.png,.jpg,.jpeg,.txt,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/png,image/jpeg,text/plain"
-                    onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
+                    onChange={(e) => {
+                      handleFiles(Array.from(e.target.files ?? []));
+                      e.currentTarget.value = '';
+                    }}
                     className="hidden"
                   />
-                  {file ? (
-                    <div className="flex items-center justify-center gap-2">
-                      <FileText className="h-5 w-5 text-teal-600" />
-                      <span className="text-sm font-medium text-gray-700">{file.name}</span>
-                      <span className="text-xs text-gray-400">({(file.size / 1024 / 1024).toFixed(1)} MB)</span>
+                  {files.length > 0 ? (
+                    <div className="grid grid-cols-2 gap-3 text-left sm:grid-cols-3">
+                      {files.map((selectedFile, index) => (
+                        <div key={`${selectedFile.name}-${selectedFile.lastModified}-${index}`} className="relative overflow-hidden rounded-xl border border-teal-100 bg-white">
+                          {previewUrls[index] ? (
+                            <img src={previewUrls[index] ?? undefined} alt={selectedFile.name} className="h-24 w-full object-cover" />
+                          ) : (
+                            <div className="flex h-24 items-center justify-center bg-gray-50"><FileText className="h-8 w-8 text-teal-600" /></div>
+                          )}
+                          <p className="truncate px-2 pt-1 text-xs font-semibold text-gray-700">{selectedFile.name}</p>
+                          <p className="px-2 pb-2 text-[10px] text-gray-400">{(selectedFile.size / 1024 / 1024).toFixed(1)} MB</p>
+                          <button type="button" onClick={(event) => { event.stopPropagation(); setFiles((current) => current.filter((_, fileIndex) => fileIndex !== index)); }} className="absolute right-1 top-1 rounded-full bg-white/90 p-1 text-red-500 shadow" aria-label={`Quitar ${selectedFile.name}`}><X className="h-3.5 w-3.5" /></button>
+                        </div>
+                      ))}
                     </div>
                   ) : (
                     <div className="flex flex-col items-center gap-2">
@@ -352,15 +393,32 @@ export function CollaborateModal({ open, onClose }: CollaborateModalProps) {
                     </div>
                   )}
                 </div>
-                {file && (
+                {files.length > 0 && (
                   <button
-                    onClick={() => setFile(null)}
+                    type="button"
+                    onClick={() => setFiles([])}
                     className="mt-2 text-xs font-semibold text-red-500 hover:text-red-700"
                   >
-                    Quitar archivo
+                    Quitar todos los archivos
                   </button>
                 )}
               </div>
+
+              {materialType === 'texto' && (
+                <div>
+                  <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-gray-500">
+                    Texto de WhatsApp *
+                  </label>
+                  <textarea
+                    value={textContent}
+                    onChange={(event) => setTextContent(event.target.value)}
+                    rows={9}
+                    placeholder="Pegá aquí las preguntas o el apunte copiado desde WhatsApp..."
+                    className="w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-sm text-gray-800 outline-none focus:border-teal-500"
+                  />
+                  <p className="mt-1 text-xs text-gray-400">Mínimo 20 caracteres. Se procesará automáticamente con IA.</p>
+                </div>
+              )}
 
               {/* Progress bar */}
               {uploading && progress > 0 && (
@@ -389,7 +447,7 @@ export function CollaborateModal({ open, onClose }: CollaborateModalProps) {
               {/* Submit */}
               <button
                 onClick={handleSubmit}
-                disabled={uploading || !university.trim() || !subject.trim() || !chair.trim() || !file}
+                disabled={uploading || !university.trim() || !subject.trim() || !chair.trim() || (materialType === 'texto' ? textContent.trim().length < 20 : files.length === 0)}
                 className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 py-4 font-bold text-white transition-all hover:from-teal-700 hover:to-emerald-700 active:scale-[0.98] shadow-lg disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
               >
                 {uploading ? (
