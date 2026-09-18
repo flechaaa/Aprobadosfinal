@@ -95,9 +95,9 @@ export function getAllQuestions(): Question[] {
 }
 
 /**
- * Carga preguntas dinámicamente desde Supabase según la materia o cátedra seleccionada.
+ * Carga preguntas dinÃ¡micamente desde Supabase segÃºn la materia o cÃ¡tedra seleccionada.
  * Si no hay datos en Supabase para ese filtro, devolvemos [] en lugar de mezclar con
- * un JSON local de infectología.
+ * un JSON local de infectologÃ­a.
  */
 export async function loadQuestionsForGame(selection: {
   universityId: string;
@@ -113,7 +113,7 @@ export async function loadQuestionsForGame(selection: {
     });
 
     let questionsData: SupabaseQuestionRow[] = [];
-    // 1) Si el árbol ya trae una cátedra exacta, consultamos sólo por ese chair_id.
+    // 1) Si el Ã¡rbol ya trae una cÃ¡tedra exacta, consultamos sÃ³lo por ese chair_id.
     if (chairId !== 'all') {
       const data = await queryQuestionRows({ column: 'chair_id', operator: 'eq', value: chairId });
 
@@ -125,8 +125,8 @@ export async function loadQuestionsForGame(selection: {
       }
     }
 
-    // 2) Si no apareció el chair_id directo, resolve el subject_id a su nombre
-    //    y hacemos un filtro de materia estricto, con una rama exclusiva para Infectología.
+    // 2) Si no apareciÃ³ el chair_id directo, resolve el subject_id a su nombre
+    //    y hacemos un filtro de materia estricto, con una rama exclusiva para InfectologÃ­a.
     if (questionsData.length === 0 && chairId === 'all' && selection.universityId && selection.subjectId) {
       const chairIds = await queryChairIdsForSelection(selection);
       if (chairIds.length > 0) {
@@ -152,7 +152,7 @@ export async function loadQuestionsForGame(selection: {
     subjectId: selection.subjectId,
     chairId: selection.chairId || 'all',
   };
-  console.error('[loadQuestionsForGame] No había preguntas en Supabase para este filtro. No se usó el fallback local de infectología.', selectionSummary);
+  console.error('[loadQuestionsForGame] No habÃ­a preguntas en Supabase para este filtro. No se usÃ³ el fallback local de infectologÃ­a.', selectionSummary);
 
   return [];
 }
@@ -187,16 +187,44 @@ export function selectRandomQuestions(count: number = QUESTIONS_PER_GAME): numbe
   return indices.slice(0, Math.min(count, total));
 }
 
-export function encodeChallenge(data: ChallengeData): string {
-  return btoa(encodeURIComponent(JSON.stringify(data)));
-}
+export async function createChallenge(data: ChallengeData): Promise<string | null> {
+  const { data: row, error } = await supabase
+    .from('challenges')
+    .insert({
+      questions: data.q,
+      challenger_name: data.n,
+      challenger_score: data.s,
+      selection: data.selection ?? null,
+    })
+    .select('id')
+    .single();
 
-export function decodeChallenge(encoded: string): ChallengeData | null {
-  try {
-    return JSON.parse(decodeURIComponent(atob(encoded)));
-  } catch {
+  if (error || !row) {
+    console.error('No se pudo crear el desafío:', error);
     return null;
   }
+
+  return row.id as string;
+}
+
+export async function loadChallenge(id: string): Promise<ChallengeData | null> {
+  const { data, error } = await supabase
+    .from('challenges')
+    .select('questions, challenger_name, challenger_score, selection')
+    .eq('id', id)
+    .single();
+
+  if (error || !data) {
+    console.error('No se pudo cargar el desafío:', error);
+    return null;
+  }
+
+  return {
+    q: Array.isArray(data.questions) ? (data.questions as Question[]) : [],
+    n: typeof data.challenger_name === 'string' ? data.challenger_name : 'Anónimo',
+    s: typeof data.challenger_score === 'number' ? data.challenger_score : 0,
+    selection: (data.selection as ChallengeData['selection']) ?? undefined,
+  };
 }
 
 export function calculatePoints(timeLeft: number): number {
@@ -206,3 +234,4 @@ export function calculatePoints(timeLeft: number): number {
 }
 
 export { TIME_PER_QUESTION };
+

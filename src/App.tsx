@@ -6,7 +6,7 @@ import { AdminPanel } from '@/components/AdminPanel';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { supabase } from '@/lib/supabase';
 import { loadTaxonomy } from '@/utils/taxonomy';
-import { selectRandomQuestions, decodeChallenge, loadQuestionsForGame, loadRandomQuestionsForGame } from '@/utils/game';
+import { selectRandomQuestions, loadChallenge, loadQuestionsForGame, loadRandomQuestionsForGame } from '@/utils/game';
 import type { AnswerRecord, Chair, ChallengeData, Question, Subject, University } from '@/types';
 import type { TaxonomySelection } from '@/components/TaxonomyPicker';
 
@@ -74,24 +74,27 @@ function App() {
     setCurrentSelection(challengeSelection);
     setPlayerName('Anónimo');
     setQuestionsLoadError('');
-    setQuestionIndices(decodedChallenge.q);
-    setQuestions([]);
+    setQuestions(decodedChallenge.q);
+    setQuestionIndices(decodedChallenge.q.map((_, i) => i));
     setScreen('game');
   }
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const mode = params.get('mode');
-    const c = params.get('c');
+    const id = params.get('id');
 
-    if (c) {
-      const decoded = decodeChallenge(c);
-      if (decoded) {
-        setChallengeData(decoded);
-        if (mode === 'challenge') {
-          startChallengeFromUrl(decoded);
+    if (id) {
+      void loadChallenge(id).then((decoded) => {
+        if (decoded && decoded.q.length > 0) {
+          setChallengeData(decoded);
+          if (mode === 'challenge') {
+            startChallengeFromUrl(decoded);
+          }
+        } else {
+          setQuestionsLoadError('El desafío ya no está disponible o el link es inválido.');
         }
-      }
+      });
     }
 
     void fetchTaxonomy();

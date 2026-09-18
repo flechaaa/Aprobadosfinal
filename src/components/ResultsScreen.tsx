@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Trophy, RefreshCw, Check, X, Swords, Home, Medal, GraduationCap, Download, Camera } from 'lucide-react';
 import { toBlob } from 'html-to-image';
-import { encodeChallenge } from '@/utils/game';
+import { createChallenge } from '@/utils/game';
 import { saveRankingScore } from '@/utils/rankings';
 import { ensureTaxonomyFromSubmission } from '@/utils/moderation';
 import type { AnswerRecord, ChallengeData, Chair, Question, Subject, University } from '@/types';
@@ -166,7 +166,15 @@ export function ResultsScreen({
     }
   };
 
-  const buildChallengeUrl = () => {
+  const [challengeId, setChallengeId] = useState<string | null>(null);
+  const [challengeCreating, setChallengeCreating] = useState(false);
+  const challengeCreatedRef = useRef(false);
+
+  useEffect(() => {
+    if (challengeCreatedRef.current) return;
+    challengeCreatedRef.current = true;
+    setChallengeCreating(true);
+
     const challengePayload = {
       q: questions,
       n: playerAlias,
@@ -182,11 +190,21 @@ export function ResultsScreen({
         : undefined,
     };
 
-    const encoded = encodeChallenge(challengePayload);
+    createChallenge(challengePayload)
+      .then((id) => setChallengeId(id))
+      .finally(() => setChallengeCreating(false));
+    // Se crea una sola vez por partida jugada (challengeCreatedRef lo garantiza),
+    // así no se inserta una fila nueva en challenges en cada re-render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const buildChallengeUrl = (): string | null => {
+    if (!challengeId) return null;
+
     const url = new URL(window.location.href);
     url.search = '';
     url.searchParams.set('mode', 'challenge');
-    url.searchParams.set('c', encoded);
+    url.searchParams.set('id', challengeId);
     url.searchParams.set('materia', shareMateria);
     url.searchParams.set('preguntero', sharePreguntero);
     url.searchParams.set('puntaje', String(totalPoints));
@@ -194,18 +212,21 @@ export function ResultsScreen({
     return url.toString();
   };
 
-  const buildWhatsAppCombinedMessage = () => {
+  const buildWhatsAppCombinedMessage = (): string | null => {
     const challengeUrl = buildChallengeUrl();
+    if (!challengeUrl) return null;
     return `Mi resultado en Aprobados: ${shareMateria} - ${totalPoints} puntos. Desafia a un amigo: ${challengeUrl}`;
   };
 
   const handleWhatsAppDirect = () => {
     const message = buildWhatsAppCombinedMessage();
+    if (!message) return;
     window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
   };
 
   useEffect(() => {
     const url = buildChallengeUrl();
+    if (!url) return;
 
     const previewTitle = `${playerAlias} obtuvo ${totalPoints} puntos en Aprobados`;
     const previewDescription = `${shareMateria} | ${sharePreguntero} | Puntaje: ${totalPoints}`;
@@ -235,7 +256,7 @@ export function ResultsScreen({
       }
       tag.setAttribute('content', content);
     });
-  }, [playerAlias, questions, shareMateria, sharePreguntero, totalPoints]);
+  }, [challengeId, playerAlias, questions, shareMateria, sharePreguntero, totalPoints]);
 
   const playAudio = (url: string) => {
     try {
@@ -553,10 +574,11 @@ export function ResultsScreen({
               <button
                 type="button"
                 onClick={handleWhatsAppDirect}
-                className="inline-flex items-center justify-center gap-2 bg-[#25D366] text-white font-bold px-4 py-3 rounded-2xl hover:bg-[#20bd5a] transition shadow-md"
+                disabled={challengeCreating || !challengeId}
+                className="inline-flex items-center justify-center gap-2 bg-[#25D366] text-white font-bold px-4 py-3 rounded-2xl hover:bg-[#20bd5a] transition shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <WhatsAppIcon className="w-4 h-4" />
-                Desafia por wsp
+                {challengeCreating ? 'Preparando desafío...' : 'Desafia por wsp'}
               </button>
             </div>
 
