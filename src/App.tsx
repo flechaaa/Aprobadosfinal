@@ -55,29 +55,36 @@ function App() {
       );
   }, []);
 
-  function startChallengeFromUrl(decodedChallenge: ChallengeData) {
-    if (!decodedChallenge.selection) {
-      setChallengeData(decodedChallenge);
-      setScreen('start');
-      return;
-    }
+  const [pendingChallenge, setPendingChallenge] = useState<ChallengeData | null>(null);
+  const [challengeNameInput, setChallengeNameInput] = useState('');
 
-    const challengeSelection: TaxonomySelection = {
-      universityId: decodedChallenge.selection.universityId,
-      subjectId: decodedChallenge.selection.subjectId,
-      partialId: decodedChallenge.selection.partialId || decodedChallenge.selection.chairId || '',
-      chairId: decodedChallenge.selection.chairId || decodedChallenge.selection.partialId || '',
-      unitId: decodedChallenge.selection.unitId ?? null,
-    };
+  function startChallengeFromUrl(decodedChallenge: ChallengeData, name: string) {
+    const challengeSelection: TaxonomySelection | null = decodedChallenge.selection
+      ? {
+          universityId: decodedChallenge.selection.universityId,
+          subjectId: decodedChallenge.selection.subjectId,
+          partialId: decodedChallenge.selection.partialId || decodedChallenge.selection.chairId || '',
+          chairId: decodedChallenge.selection.chairId || decodedChallenge.selection.partialId || '',
+          unitId: decodedChallenge.selection.unitId ?? null,
+        }
+      : null;
 
     setChallengeData(decodedChallenge);
     setCurrentSelection(challengeSelection);
-    setPlayerName('Anónimo');
+    setPlayerName(name.trim() || 'Anónimo');
     setQuestionsLoadError('');
     setQuestions(decodedChallenge.q);
     setQuestionIndices(decodedChallenge.q.map((_, i) => i));
     setScreen('game');
   }
+
+  const handleChallengeNameSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!pendingChallenge) return;
+    startChallengeFromUrl(pendingChallenge, challengeNameInput);
+    setPendingChallenge(null);
+    setChallengeNameInput('');
+  };
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -89,7 +96,7 @@ function App() {
         if (decoded && decoded.q.length > 0) {
           setChallengeData(decoded);
           if (mode === 'challenge') {
-            startChallengeFromUrl(decoded);
+            setPendingChallenge(decoded);
           }
         } else {
           setQuestionsLoadError('El desafío ya no está disponible o el link es inválido.');
@@ -192,6 +199,33 @@ function App() {
 
   return (
     <ErrorBoundary>
+      {pendingChallenge && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 px-4">
+          <form onSubmit={handleChallengeNameSubmit} className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
+            <h2 className="text-xl font-extrabold text-gray-900">¡Te desafiaron a un duelo!</h2>
+            <p className="mt-2 text-sm text-gray-600">
+              <span className="font-bold text-gray-800">{pendingChallenge.n}</span> te desafió con {pendingChallenge.s} puntos. Decinos tu nombre para arrancar.
+            </p>
+            <input
+              type="text"
+              value={challengeNameInput}
+              onChange={(event) => setChallengeNameInput(event.target.value)}
+              autoFocus
+              maxLength={50}
+              required
+              placeholder="Tu nombre o apodo"
+              className="mt-4 w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-sm text-gray-800 outline-none focus:border-teal-500"
+            />
+            <button
+              type="submit"
+              disabled={!challengeNameInput.trim()}
+              className="mt-4 w-full rounded-xl bg-teal-600 px-4 py-3 font-bold text-white hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Aceptar el desafío
+            </button>
+          </form>
+        </div>
+      )}
       {screen === 'start' && (
         <StartScreen
           onStart={handleStart}
