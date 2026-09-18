@@ -4,7 +4,7 @@ import { toBlob } from 'html-to-image';
 import { encodeChallenge } from '@/utils/game';
 import { saveRankingScore } from '@/utils/rankings';
 import { ensureTaxonomyFromSubmission } from '@/utils/moderation';
-import type { AnswerRecord, ChallengeData, Chair, Subject, University } from '@/types';
+import type { AnswerRecord, ChallengeData, Chair, Question, Subject, University } from '@/types';
 import type { TaxonomySelection } from '@/components/TaxonomyPicker';
 import { AdBanner } from './AdBanner';
 import { RankingModal } from '@/components/RankingModal';
@@ -19,6 +19,7 @@ function isAnonymousPlayerName(name: string): boolean {
 interface ResultsScreenProps {
   answers: AnswerRecord[];
   questionIndices: number[];
+  questions: Question[];
   playerName: string;
   challengeData: ChallengeData | null;
   selection: TaxonomySelection | null;
@@ -58,6 +59,7 @@ function useCountUp(target: number, duration: number) {
 export function ResultsScreen({
   answers,
   questionIndices,
+  questions,
   playerName,
   challengeData,
   selection,
@@ -166,7 +168,7 @@ export function ResultsScreen({
 
   const buildChallengeUrl = () => {
     const challengePayload = {
-      q: questionIndices,
+      q: questions,
       n: playerAlias,
       s: totalPoints,
       selection: selection
@@ -233,7 +235,7 @@ export function ResultsScreen({
       }
       tag.setAttribute('content', content);
     });
-  }, [playerAlias, questionIndices, shareMateria, sharePreguntero, totalPoints]);
+  }, [playerAlias, questions, shareMateria, sharePreguntero, totalPoints]);
 
   const playAudio = (url: string) => {
     try {
@@ -413,7 +415,7 @@ export function ResultsScreen({
                 key={i}
                 className={`text-2xl ${i < rating.stars ? 'text-amber-400' : 'text-gray-200'}`}
               >
-                ★
+                â˜…
               </span>
             ))}
           </div>
@@ -511,7 +513,7 @@ export function ResultsScreen({
                 </div>
                 <div className="text-right">
                   <span className="text-[11px] font-black uppercase tracking-[0.2em] text-teal-100">Ranking</span>
-                  <span className="block text-2xl font-black">#{rankingPosition ?? '—'}</span>
+                  <span className="block text-2xl font-black">#{rankingPosition ?? 'â€”'}</span>
                 </div>
               </div>
 
@@ -533,7 +535,7 @@ export function ResultsScreen({
                 </div>
                 <div className="text-right">
                   <p className="text-xs font-black uppercase tracking-[0.2em] text-teal-100">Mi puesto</p>
-                  <p className="text-3xl font-black">#{rankingPosition ?? '—'}</p>
+                  <p className="text-3xl font-black">#{rankingPosition ?? 'â€”'}</p>
                 </div>
               </div>
             </div>
@@ -627,8 +629,8 @@ export function ResultsScreen({
                     </p>
                     <p className="text-xs text-gray-500 mt-0.5">
                       {answer.correct
-                        ? `Correcta • +${answer.points} pts`
-                        : `Incorrecta • ${selectedText}`}
+                        ? `Correcta â€¢ +${answer.points} pts`
+                        : `Incorrecta â€¢ ${selectedText}`}
                     </p>
                     <p className="text-xs text-gray-500 mt-0.5">
                       Opción elegida: {selectedText}

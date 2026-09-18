@@ -104,8 +104,8 @@ function App() {
     setQuestionsLoadError('');
 
     if (challengeData) {
-      const safeIndices = Array.isArray(challengeData.q) && challengeData.q.length > 0 ? challengeData.q : [];
-      if (safeIndices.length === 0) {
+      const challengeQuestions = Array.isArray(challengeData.q) ? challengeData.q : [];
+      if (challengeQuestions.length === 0) {
         setQuestions([]);
         setQuestionIndices([]);
         setQuestionsLoadError('El desafío recibido no incluye preguntas válidas.');
@@ -113,8 +113,8 @@ function App() {
         return;
       }
 
-      setQuestionIndices(safeIndices);
-      setQuestions([]);
+      setQuestions(challengeQuestions);
+      setQuestionIndices(challengeQuestions.map((_, i) => i));
       setScreen('game');
       return;
     }
@@ -230,6 +230,7 @@ function App() {
         <ResultsScreen
           answers={answers}
           questionIndices={questionIndices}
+          questions={questions}
           playerName={playerName}
           challengeData={challengeData}
           selection={currentSelection}

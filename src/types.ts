@@ -16,7 +16,7 @@ export interface ChallengeSelectionPayload {
 }
 
 export interface ChallengeData {
-  q: number[];
+  q: Question[]; // antes: number[] (índices) — ahora lleva el contenido real de las preguntas jugadas
   n: string;
   s: number;
   selection?: ChallengeSelectionPayload;
