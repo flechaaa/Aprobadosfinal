@@ -89,6 +89,7 @@ export function ResultsScreen({
     const savedName = localStorage.getItem(RANKING_PLAYER_NAME_KEY)?.trim();
     return !savedName || isAnonymousPlayerName(playerName);
   });
+  const displayName = rankingPlayerName.trim() || playerAlias;
   const [rankingOpen, setRankingOpen] = useState(false);
   const [rankingPosition, setRankingPosition] = useState<number | null>(null);
   const [downloadFallbackMessage, setDownloadFallbackMessage] = useState('');
@@ -337,7 +338,6 @@ export function ResultsScreen({
 
   const hasRankingChair = Boolean(selection?.chairId && selection.chairId !== 'all');
   const effectiveRankingName = rankingPlayerName.trim();
-  const displayName = effectiveRankingName || playerAlias;
 
   const handleRankingNameSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
