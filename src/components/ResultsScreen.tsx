@@ -225,6 +225,12 @@ export function ResultsScreen({
     window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
   };
 
+  const handleWhatsAppShareResult = () => {
+    const appUrl = `${window.location.origin}${window.location.pathname}`;
+    const message = `Obtuve ${totalPoints} puntos en ${shareMateria} - ${sharePreguntero} en Aprobados! Probalo vos también: ${appUrl}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
+  };
+
   useEffect(() => {
     const url = buildChallengeUrl();
     if (!url) return;
@@ -535,7 +541,7 @@ export function ResultsScreen({
                 </div>
                 <div className="text-right">
                   <span className="text-[11px] font-black uppercase tracking-[0.2em] text-teal-100">Ranking</span>
-                  <span className="block text-2xl font-black">#{rankingPosition ?? 'â€”'}</span>
+                  <span className="block text-2xl font-black">#{rankingPosition ?? '\u2014'}</span>
                 </div>
               </div>
 
@@ -557,8 +563,20 @@ export function ResultsScreen({
                 </div>
                 <div className="text-right">
                   <p className="text-xs font-black uppercase tracking-[0.2em] text-teal-100">Mi puesto</p>
-                  <p className="text-3xl font-black">#{rankingPosition ?? 'â€”'}</p>
+                  <p className="text-3xl font-black">#{rankingPosition ?? '\u2014'}</p>
                 </div>
+              </div>
+
+              <div className="relative z-10 mt-5 flex items-center justify-between gap-3 rounded-2xl bg-white/10 px-3 py-2">
+                <p className="text-[11px] font-bold uppercase tracking-wide text-teal-100 leading-tight">
+                  Escaneá para<br />jugar en Aprobados
+                </p>
+                <img
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&margin=4&data=${encodeURIComponent(`${window.location.origin}${window.location.pathname}`)}`}
+                  alt="Código QR para entrar a Aprobados"
+                  crossOrigin="anonymous"
+                  className="h-16 w-16 rounded-lg bg-white p-1"
+                />
               </div>
             </div>
 
@@ -569,7 +587,7 @@ export function ResultsScreen({
                 className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-[#F58529] via-[#DD2A7B] to-[#8134AF] text-white font-bold px-4 py-3 rounded-2xl hover:opacity-90 transition shadow-md"
               >
                 <Camera className="w-4 h-4" />
-                Compartir Historia de Instagram
+                Compartí tu resultado
               </button>
 
               <button
@@ -579,7 +597,16 @@ export function ResultsScreen({
                 className="inline-flex items-center justify-center gap-2 bg-[#25D366] text-white font-bold px-4 py-3 rounded-2xl hover:bg-[#20bd5a] transition shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <WhatsAppIcon className="w-4 h-4" />
-                {challengeCreating ? 'Preparando desafío...' : 'Desafia por wsp'}
+                {challengeCreating ? 'Preparando desafío...' : 'Desafiá a tus amigos'}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleWhatsAppShareResult}
+                className="inline-flex items-center justify-center gap-2 border-2 border-[#25D366] text-[#128C4A] font-bold px-4 py-3 rounded-2xl hover:bg-[#25D366]/10 transition"
+              >
+                <WhatsAppIcon className="w-4 h-4" />
+                Enviar por WhatsApp
               </button>
             </div>
 
