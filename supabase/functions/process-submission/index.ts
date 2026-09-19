@@ -25,21 +25,31 @@ interface ExtractedQuestion {
   explicacion: string;
 }
 
+const CHUNK_MAX_CHARS = 6000;
+const CHUNK_PAUSE_MS = 3000;
+
 // ============================================================
-// Prompt (idéntico al de utils/gemini.ts del frontend)
+// Prompts: uno para EXTRAER preguntas ya escritas (exámenes,
+// pregunteros) y otro para GENERAR preguntas nuevas a partir de
+// material de clase (apuntes, diapositivas, teoría).
+// Los dos incluyen la regla anti-sesgo de longitud de opciones.
 // ============================================================
-function getSystemPrompt(): string {
+const ANTI_BIAS_RULE = `
+REGLA ANTI-SESGO (crítica): las 4 opciones de cada pregunta deben tener longitud y nivel de detalle SIMILAR entre sí. Nunca redactes la opción correcta como la más larga, la más desarrollada o la única con justificación agregada — eso le permite a cualquiera adivinar la respuesta por el largo del texto, sin saber el tema. Si hace falta, resumí la opción correcta o expandí los distractores para emparejar longitudes. Además, variá en qué posición (0, 1, 2 o 3) cae la respuesta correcta entre las distintas preguntas que generes — no la pongas siempre en el mismo índice.`;
+
+function getExtractionPrompt(): string {
   return `
 Sos un parser y docente médico especializado en estructurar exámenes choice.
-Tu objetivo es extraer y normalizar TODAS las preguntas presentes en el material provisto, sin omitir ninguna.
+Tu objetivo es extraer y normalizar TODAS las preguntas presentes en el fragmento de material provisto, sin omitir ninguna.
 
 REGLAS CRÍTICAS:
 1. Si el material contiene casos clínicos seriados (por ejemplo, una viñeta clínica común con varias preguntas derivadas 1, 2, 3...), generá una pregunta independiente para CADA sub-pregunta.
 2. En cada una de esas preguntas, incluí en el enunciado un breve resumen o contexto del caso para que sea auto-explicativa al aparecer en el juego.
-3. Extraé absolutamente todas las preguntas (si hay 20 o 25, extraé todas).
+3. Extraé absolutamente todas las preguntas del fragmento (si hay 20 o 25, extraé todas).
 4. 'correcta' debe ser el índice numérico de la opción correcta: 0 para la primera (A), 1 para la segunda (B), 2 para la tercera (C), 3 para la cuarta (D).
 5. Proporcioná una breve justificación médica en 'explicacion'.
 6. Si en el texto aparece una universidad, materia o cátedra escrita con tildes, acentos, mayúsculas, abreviaturas o espacios extra, normalizá la entidad de salida a la versión oficial canónica y limpia.
+${ANTI_BIAS_RULE}
 
 Devolvé estrictamente un JSON válido con este formato exacto:
 {
@@ -53,6 +63,66 @@ Devolvé estrictamente un JSON válido con este formato exacto:
   ]
 }
 `;
+}
+
+function getGenerationPrompt(): string {
+  return `
+Sos un docente médico experto en crear exámenes de opción múltiple a partir de material de clase (apuntes, diapositivas, resúmenes teóricos).
+El fragmento de material provisto NO contiene preguntas ya escritas — es contenido teórico. Tu trabajo es LEERLO, ENTENDERLO, e INVENTAR preguntas de opción múltiple originales que evalúen los conceptos médicos clave que aparecen en él.
+
+REGLAS CRÍTICAS:
+1. Generá entre 3 y 8 preguntas por este fragmento, según cuánto contenido relevante y evaluable tenga (no inventes preguntas triviales o de relleno si el fragmento es corto o poco sustancioso — en ese caso generá menos, o incluso ninguna si no hay nada evaluable).
+2. Cada pregunta debe evaluar un concepto médico concreto que esté respaldado por el texto — no inventes datos, cifras ni afirmaciones que no estén en el material.
+3. Los 3 distractores (opciones incorrectas) deben ser médicamente plausibles: errores conceptuales comunes de un estudiante, no opciones absurdas o evidentemente falsas.
+4. 'correcta' es el índice numérico 0 (A), 1 (B), 2 (C) o 3 (D).
+5. Escribí una explicación breve y concisa de por qué la respuesta correcta lo es, basada en el material.
+6. Si en el texto aparece una universidad, materia o cátedra escrita con tildes, acentos, mayúsculas, abreviaturas o espacios extra, normalizá la entidad de salida a la versión oficial canónica y limpia.
+${ANTI_BIAS_RULE}
+
+Devolvé estrictamente un JSON válido con este formato exacto:
+{
+  "preguntas": [
+    {
+      "pregunta": "Enunciado claro y autosuficiente de la pregunta",
+      "opciones": ["Opción A", "Opción B", "Opción C", "Opción D"],
+      "correcta": 0,
+      "explicacion": "Fundamentación concisa basada en el material."
+    }
+  ]
+}
+`;
+}
+
+// ============================================================
+// Fraccionamiento: parte un texto largo en fragmentos manejables
+// por párrafos, para no mandar una clase entera en un solo pedido
+// (evita agotar tokens/contexto de golpe).
+// ============================================================
+function splitIntoChunks(text: string, maxChunkChars = CHUNK_MAX_CHARS): string[] {
+  const paragraphs = text.split(/\n\s*\n/).filter((p) => p.trim().length > 0);
+  const chunks: string[] = [];
+  let current = '';
+
+  for (const paragraph of paragraphs) {
+    const candidate = current ? `${current}\n\n${paragraph}` : paragraph;
+    if (candidate.length > maxChunkChars && current.length > 0) {
+      chunks.push(current.trim());
+      current = paragraph;
+    } else {
+      current = candidate;
+    }
+  }
+  if (current.trim().length > 0) chunks.push(current.trim());
+
+  // Si un párrafo individual supera el límite (poco frecuente), se parte a la fuerza.
+  return chunks.flatMap((chunk) => {
+    if (chunk.length <= maxChunkChars) return [chunk];
+    const pieces: string[] = [];
+    for (let i = 0; i < chunk.length; i += maxChunkChars) {
+      pieces.push(chunk.slice(i, i + maxChunkChars));
+    }
+    return pieces;
+  });
 }
 
 // ============================================================
@@ -120,7 +190,7 @@ async function callGroq(textContent: string, prompt: string): Promise<ExtractedQ
       Authorization: `Bearer ${GROQ_API_KEY}`,
     },
     body: JSON.stringify({
-      model: 'llama-3.3-70b-versatile',
+      model: 'openai/gpt-oss-120b',
       messages: [
         { role: 'system', content: prompt },
         { role: 'user', content: `Texto completo del examen:\n\n${textContent}` },
@@ -298,29 +368,46 @@ Deno.serve(async (req) => {
         throw new Error('El material no tiene texto extraído (processed_text vacío). Revisá que el frontend lo esté enviando.');
       }
 
-      const prompt = getSystemPrompt();
-      let lastError = '';
+      const isGenerationMode = submission.material_type === 'apunte';
+      const prompt = isGenerationMode ? getGenerationPrompt() : getExtractionPrompt();
+      const chunks = splitIntoChunks(text);
+      console.info(`[AI] Material dividido en ${chunks.length} fragmento(s). Modo: ${isGenerationMode ? 'generación' : 'extracción'}.`);
 
-      if (GROQ_API_KEY) {
-        try {
-          extracted = await callGroq(text, prompt);
-        } catch (err) {
-          console.warn('[AI] Falló Groq, derivando a Gemini:', err);
-          lastError = err instanceof Error ? err.message : String(err);
+      let groqError = '';
+      let geminiError = '';
+
+      for (const [index, chunk] of chunks.entries()) {
+        let chunkQuestions: ExtractedQuestion[] = [];
+
+        if (GROQ_API_KEY) {
+          try {
+            chunkQuestions = await callGroq(chunk, prompt);
+          } catch (err) {
+            console.warn(`[AI] Falló Groq en fragmento ${index + 1}/${chunks.length}, derivando a Gemini:`, err);
+            groqError = err instanceof Error ? err.message : String(err);
+          }
+        } else {
+          groqError = 'GROQ_API_KEY no configurada.';
         }
-      }
 
-      if (extracted.length === 0 && GEMINI_API_KEY) {
-        try {
-          extracted = await callGemini(text, prompt);
-        } catch (err) {
-          console.error('[AI] Falló Gemini:', err);
-          lastError = err instanceof Error ? err.message : String(err);
+        if (chunkQuestions.length === 0 && GEMINI_API_KEY) {
+          try {
+            chunkQuestions = await callGemini(chunk, prompt);
+          } catch (err) {
+            console.error(`[AI] Falló Gemini en fragmento ${index + 1}/${chunks.length}:`, err);
+            geminiError = err instanceof Error ? err.message : String(err);
+          }
+        }
+
+        extracted.push(...chunkQuestions);
+
+        if (index < chunks.length - 1) {
+          await new Promise((resolve) => setTimeout(resolve, CHUNK_PAUSE_MS));
         }
       }
 
       if (extracted.length === 0) {
-        throw new Error(`No se pudieron extraer preguntas. Detalle: ${lastError}`);
+        throw new Error(`No se pudieron extraer preguntas. Groq: ${groqError || 'no intentado'}. Gemini: ${geminiError || 'no intentado'}.`);
       }
     }
 
