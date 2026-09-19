@@ -190,7 +190,7 @@ async function callGroq(textContent: string, prompt: string): Promise<ExtractedQ
       Authorization: `Bearer ${GROQ_API_KEY}`,
     },
     body: JSON.stringify({
-      model: 'llama-3.3-70b-versatile',
+      model: 'openai/gpt-oss-120b',
       messages: [
         { role: 'system', content: prompt },
         { role: 'user', content: `Texto completo del examen:\n\n${textContent}` },
