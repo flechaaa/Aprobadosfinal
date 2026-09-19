@@ -679,8 +679,8 @@ export function ResultsScreen({
                     </p>
                     <p className="text-xs text-gray-500 mt-0.5">
                       {answer.correct
-                        ? `Correcta â€¢ +${answer.points} pts`
-                        : `Incorrecta â€¢ ${selectedText}`}
+                        ? `Correcta \u2022 +${answer.points} pts`
+                        : `Incorrecta \u2022 ${selectedText}`}
                     </p>
                     <p className="text-xs text-gray-500 mt-0.5">
                       Opción elegida: {selectedText}
