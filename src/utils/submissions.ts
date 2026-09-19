@@ -47,6 +47,8 @@ async function uploadSingleSubmission(input: SubmissionInput): Promise<Submissio
   let fileToUpload: File | Blob = input.file;
   let fileType = input.file.type;
   let fileExt = input.file.name.split('.').pop()?.toLowerCase() || 'dat';
+  let processedText: string | null = null;
+  const isImage = input.file.type.startsWith('image/');
 
   if (input.file.size > SUPABASE_SIZE_LIMIT) {
     try {
@@ -54,11 +56,22 @@ async function uploadSingleSubmission(input: SubmissionInput): Promise<Submissio
       if (!extractedText || extractedText.trim().length < 20) {
         throw new Error('El archivo supera los 50 MB y no tiene texto legible.');
       }
+      processedText = extractedText;
       fileToUpload = new Blob([extractedText], { type: 'text/plain;charset=utf-8' });
       fileType = 'text/plain';
       fileExt = 'txt';
     } catch (error) {
       throw new Error(error instanceof Error ? error.message : 'Error al procesar el archivo pesado.');
+    }
+  } else if (!isImage) {
+    // Pre-extraemos el texto en el cliente para que el procesamiento automático
+    // con IA (Edge Function) no tenga que parsear PDF/PPTX/DOCX en el servidor.
+    try {
+      processedText = input.file.type === 'text/plain'
+        ? await input.file.text()
+        : await extractTextFromFileObject(input.file);
+    } catch (error) {
+      console.warn('No se pudo pre-extraer texto del archivo; el procesamiento automático reintentará igual:', error);
     }
   }
 
@@ -86,6 +99,7 @@ async function uploadSingleSubmission(input: SubmissionInput): Promise<Submissio
     processing_status: 'pendiente_procesamiento',
     storage_path: filePath,
     user_id: sessionData.session?.user.id ?? null,
+    processed_text: processedText,
     ...(input.unit?.trim() ? { unit: input.unit.trim() } : {}),
   };
 
