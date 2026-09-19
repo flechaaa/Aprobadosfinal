@@ -420,8 +420,8 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
       setProgressMsg('Analizando preguntas con IA...');
 
       const result = await extractQuestionsFromFile(rawText, (current, total) => {
-        setProgressMsg(`Procesando bloque ${current} de ${total}...`);
-      });
+        setProgressMsg(`Procesando fragmento ${current} de ${total}...`);
+      }, selected.material_type);
 
       if (result.error) {
         setExtractError(result.error);
