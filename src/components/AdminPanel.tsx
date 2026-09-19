@@ -25,7 +25,6 @@ import {
   insertQuestion,
   insertBatchQuestions,
   markSubmissionProcessed,
-  updateSubmissionProcessingStatus,
   ensureTaxonomyFromSubmission,
   type Submission,
 } from '@/utils/moderation';
@@ -33,7 +32,7 @@ import { extractQuestionFromImage, extractQuestionsFromFile } from '@/utils/gemi
 import { fetchAndExtractText } from '@/utils/fileParser';
 import { deleteSubmission } from '@/utils/submissions';
 import { sendApprovedSubmissionPushNotification } from '@/utils/notifications';
-import { cleanupSuggestionSourceIfUnused, loadPendingQuestionSuggestions, approveQuestionSuggestion, rejectQuestionSuggestion, processFileSubmission, processImageSubmission, processTextSubmission } from '@/utils/questionSuggestions';
+import { cleanupSuggestionSourceIfUnused, loadPendingQuestionSuggestions, approveQuestionSuggestion, rejectQuestionSuggestion } from '@/utils/questionSuggestions';
 import type { Question, TaxonomySuggestion } from '@/types';
 
 interface AdminPanelProps {
@@ -42,18 +41,6 @@ interface AdminPanelProps {
 
 interface EditableQuestion extends Question {
   approved: boolean;
-}
-
-const AUTO_PROCESS_DELAY_MS = 20_000;
-const QUOTA_COOLDOWN_MS = 30_000;
-
-function waitForProcessingQueue(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function isGeminiQuotaError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error);
-  return message.includes('429') || message.includes('RESOURCE_EXHAUSTED') || message.toLocaleLowerCase().includes('cuota de gemini');
 }
 
 interface QuestionReport {
@@ -195,65 +182,6 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
     try {
       const pending = await loadPendingSubmissions();
       setSubmissions(pending);
-      const pendingImages = pending.filter((submission) =>
-        (Boolean(submission.file_url) || submission.material_type === 'texto') &&
-        (submission.processing_status === 'pendiente_procesamiento' || submission.processing_status === 'error' || !submission.processing_status),
-      );
-      if (pendingImages.length > 0) {
-        setAutoProcessingIds(pendingImages.map((submission) => submission.id));
-        for (const [index, submission] of pendingImages.entries()) {
-          let quotaError = false;
-          try {
-            await updateSubmissionProcessingStatus(submission.id, 'procesando', adminPassword);
-            if (submission.material_type === 'texto') {
-              await processTextSubmission({
-                submissionId: submission.id,
-                text: submission.processed_text ?? '',
-                university: submission.university,
-                subject: submission.subject,
-                chair: submission.chair,
-              });
-            } else if (submission.file_url && submission.file_type.startsWith('image/')) {
-              await processImageSubmission({
-                submissionId: submission.id,
-                storagePath: submission.storage_path,
-                fileUrl: submission.file_url,
-                fileType: submission.file_type,
-                university: submission.university,
-                subject: submission.subject,
-                chair: submission.chair,
-              });
-            } else if (submission.file_url) {
-              await processFileSubmission({
-                submissionId: submission.id,
-                storagePath: submission.storage_path,
-                fileUrl: submission.file_url,
-                fileType: submission.file_type,
-                university: submission.university,
-                subject: submission.subject,
-                chair: submission.chair,
-              });
-            } else {
-              throw new Error('El envío no tiene contenido procesable.');
-            }
-            await markSubmissionProcessed(submission.id, adminPassword);
-            setSubmissions((current) => current.filter((item) => item.id !== submission.id));
-            void fetchQuestionSuggestions();
-            setMessage('Imagen procesada y enviada a pendientes de aprobación.');
-          } catch (error) {
-            quotaError = isGeminiQuotaError(error);
-            await updateSubmissionProcessingStatus(submission.id, 'error', adminPassword);
-            console.warn('No se pudo procesar automÃ¡ticamente el aporte. ContinÃºa la cola:', error);
-          } finally {
-            setAutoProcessingIds((current) => current.filter((id) => id !== submission.id));
-          }
-          if (index < pendingImages.length - 1) {
-            const delay = quotaError ? QUOTA_COOLDOWN_MS : AUTO_PROCESS_DELAY_MS;
-            console.info(`[AI] Pausa de ${Math.ceil(delay / 1000)}s antes del siguiente aporte.`);
-            await waitForProcessingQueue(delay);
-          }
-        }
-      }
       if (pending.length > 0 && !selectedId) {
         selectSubmission(pending[0]);
       }
@@ -264,7 +192,7 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
     } catch {
       setMessage('No se pudieron cargar los envíos.');
     }
-  }, [adminPassword, fetchQuestionSuggestions, selectedId]);
+  }, [selectedId]);
 
   useEffect(() => {
     if (unlocked) {
@@ -1119,7 +1047,7 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
                     <div className="flex items-center gap-2">
                       <FileText className="h-4 w-4 text-teal-600" />
                       <span className="text-sm font-bold text-gray-800">{selected.subject}</span>
-                      <span className="text-xs text-gray-400">·</span>
+                      <span className="text-xs text-gray-400">Â·</span>
                       <span className="text-xs text-gray-500">{materialTypeLabels[selected.material_type] ?? selected.material_type}</span>
                       <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700">
                         {selected.processing_status ?? (selected.processed ? 'procesado' : 'pendiente_procesamiento')}
@@ -1378,7 +1306,7 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
                       )}
 
                       <p className="text-[11px] text-gray-400">
-                        Identificador / Índice: <code className="rounded bg-gray-100 px-1 py-0.5 text-gray-600">{report.question_id}</code>
+                        Identificador / Índice: <code className="rounded bg-gray-100 px-1 py-0.5 text-gray-600">{report.question_id}</code>
                       </p>
                     </div>
 
