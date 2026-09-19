@@ -406,7 +406,7 @@ export function ResultsScreen({
       }
     } catch (err) {
       console.error('Error guardando puntaje o asegurando taxonomía:', err);
-      setSaveError('No pudimos guardar el puntaje. Intentá nuevamente.');
+      setSaveError('¡A seguir practicando! Tu práctica ya suma, y podés reintentar guardar el puntaje cuando quieras.');
     } finally {
       setSavingScore(false);
     }
@@ -635,7 +635,18 @@ export function ResultsScreen({
                     ? 'Puntaje guardado automáticamente.'
                     : 'El puntaje se guarda automáticamente.'}
                 </p>
-                {saveError && <p className="mt-1 text-sm font-bold text-red-600">{saveError}</p>}
+                {saveError && (
+                  <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+                    <p className="text-sm font-bold text-emerald-700">{saveError}</p>
+                    <button
+                      type="button"
+                      onClick={() => void handleSaveScore()}
+                      className="text-xs font-bold text-emerald-700 underline underline-offset-2 hover:text-emerald-800"
+                    >
+                      Reintentar
+                    </button>
+                  </div>
+                )}
               </div>
               <div className="flex gap-2 items-center">
                 <button
