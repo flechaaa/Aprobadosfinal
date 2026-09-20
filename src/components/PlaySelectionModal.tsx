@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowRight, Play, X } from 'lucide-react';
+import { ArrowRight, Play, X, CheckCircle2 } from 'lucide-react';
+import type { Session } from '@supabase/supabase-js';
+import { supabase } from '@/lib/supabase';
 import { AutocompleteField } from '@/components/AutocompleteField';
 import type { TaxonomySelection } from '@/components/TaxonomyPicker';
 import type { Chair, Subject, University } from '@/types';
@@ -40,6 +42,43 @@ export function PlaySelectionModal({
   const [chairName, setChairName] = useState('');
   const [useUnit, setUseUnit] = useState(false);
   const [unitName, setUnitName] = useState('');
+
+  const [session, setSession] = useState<Session | null>(null);
+  const [email, setEmail] = useState('');
+  const [magicLinkSent, setMagicLinkSent] = useState(false);
+  const [authError, setAuthError] = useState('');
+  const [sendingLink, setSendingLink] = useState(false);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setSession(data.session));
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      setSession(newSession);
+    });
+    return () => listener.subscription.unsubscribe();
+  }, []);
+
+  const hasPlayedFreeGame =
+    typeof window !== 'undefined' && localStorage.getItem('aprobados_has_played_free_game') === 'true';
+  const requiresSignIn = hasPlayedFreeGame && !session;
+
+  const handleSendMagicLink = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!email.trim() || sendingLink) return;
+    setSendingLink(true);
+    setAuthError('');
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email: email.trim(),
+        options: { emailRedirectTo: `${window.location.origin}${window.location.pathname}` },
+      });
+      if (error) throw error;
+      setMagicLinkSent(true);
+    } catch (err) {
+      setAuthError(err instanceof Error ? err.message : 'No se pudo enviar el link. Probá de nuevo.');
+    } finally {
+      setSendingLink(false);
+    }
+  };
 
   const universityId = useMemo(
     () => universities.find((u) => normalizeValue(u.name) === normalizeValue(universityName))?.id ?? '',
@@ -95,7 +134,7 @@ export function PlaySelectionModal({
 
   const handleStart = () => {
     if (!isReady) return;
-    onStart(name.trim() || 'Anónimo', {
+    onStart(name.trim() || 'AnÃ³nimo', {
       universityId,
       subjectId,
       partialId: chairId,
@@ -112,7 +151,9 @@ export function PlaySelectionModal({
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-teal-600 to-emerald-600">
           <div>
             <p className="text-xs font-black uppercase tracking-[0.2em] text-teal-100">Jugar</p>
-            <h2 className="text-xl font-extrabold text-white">Elegí tu clasificación</h2>
+            <h2 className="text-xl font-extrabold text-white">
+              {requiresSignIn ? 'Registrate para seguir' : 'Elegí tu clasificación'}
+            </h2>
           </div>
           <button type="button" onClick={onClose} className="rounded-xl p-2 text-white/90 hover:bg-white/10 transition-colors">
             <X className="h-5 w-5" />
@@ -120,6 +161,43 @@ export function PlaySelectionModal({
         </div>
 
         <div className="max-h-[calc(92vh-80px)] overflow-y-auto px-6 py-5 pb-20 space-y-4">
+          {requiresSignIn ? (
+            magicLinkSent ? (
+              <div className="py-6 text-center">
+                <CheckCircle2 className="mx-auto mb-3 h-10 w-10 text-teal-600" />
+                <p className="font-bold text-gray-800">¡Listo! Revisá tu email</p>
+                <p className="mt-1 text-sm text-gray-500">
+                  Te mandamos un link a <span className="font-semibold text-gray-700">{email}</span>. Abrilo desde este mismo dispositivo para entrar y seguir jugando.
+                </p>
+              </div>
+            ) : (
+              <form onSubmit={handleSendMagicLink} className="space-y-3">
+                <div className="mb-1 text-center">
+                  <p className="font-bold text-gray-800">Ya jugaste tu partida gratis</p>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Registrate con tu email para seguir jugando — es gratis, sin necesidad de contraseña.
+                  </p>
+                </div>
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  placeholder="tu@email.com"
+                  className="w-full rounded-xl border-2 border-gray-200 bg-white px-4 py-3 text-sm text-gray-800 outline-none transition-colors focus:border-teal-500"
+                />
+                {authError && <p className="text-xs font-semibold text-red-600">{authError}</p>}
+                <button
+                  type="submit"
+                  disabled={sendingLink || !email.trim()}
+                  className="w-full bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white font-black py-4 rounded-2xl transition-all shadow-lg disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {sendingLink ? 'Enviando...' : 'Enviarme el link para entrar'}
+                </button>
+              </form>
+            )
+          ) : (
+            <>
           <div>
             <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-gray-500">Nombre</label>
             <input
@@ -181,7 +259,7 @@ export function PlaySelectionModal({
                   value={unitName}
                   onChange={setUnitName}
                   suggestions={[]}
-                  placeholder="Ej: Unidad 1, Microbiología"
+                  placeholder="Ej: Unidad 1, MicrobiologÃ­a"
                   maxLength={200}
                 />
               </div>
@@ -208,6 +286,9 @@ export function PlaySelectionModal({
               </span>
             </button>
           </div>
+            </>
+          )}
+        </div>
         </div>
       </div>
     </div>

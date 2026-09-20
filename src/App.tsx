@@ -157,6 +157,7 @@ function App() {
 
   const handleFinish = (gameAnswers: AnswerRecord[]) => {
     setAnswers(gameAnswers);
+    localStorage.setItem('aprobados_has_played_free_game', 'true');
     setScreen('results');
   };
 
