@@ -1,6 +1,29 @@
 import { supabase } from '@/lib/supabase';
 
 export const LOCAL_RANKING_KEY = 'aprobados-local-ranking';
+const ANON_ID_KEY = 'aprobados_anon_id';
+
+// Identidad estable por dispositivo, para la partida gratis sin registrarse.
+// Evita que dos personas distintas con el mismo nombre se mezclen en el ranking.
+function getOrCreateAnonId(): string {
+  if (typeof window === 'undefined' || typeof localStorage === 'undefined') return '';
+  let id = localStorage.getItem(ANON_ID_KEY);
+  if (!id) {
+    id = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : `anon-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    localStorage.setItem(ANON_ID_KEY, id);
+  }
+  return id;
+}
+
+// Identidad para adjuntar a un puntaje: el user_id de Supabase Auth si ya se
+// registró, o el anon_id del dispositivo si todavía no.
+export async function getRankingIdentity(): Promise<{ userId: string | null; anonId: string | null }> {
+  const { data } = await supabase.auth.getSession();
+  const userId = data.session?.user?.id ?? null;
+  return userId ? { userId, anonId: null } : { userId: null, anonId: getOrCreateAnonId() };
+}
 
 export interface RankingEntry {
   id?: string;
@@ -85,6 +108,8 @@ export async function saveRankingScore({
   unit,
   correctAnswers = 0,
   questionsAnswered = 0,
+  userId = null,
+  anonId = null,
 }: {
   chairId: string;
   playerName: string;
@@ -94,6 +119,8 @@ export async function saveRankingScore({
   unit?: string | null;
   correctAnswers?: number;
   questionsAnswered?: number;
+  userId?: string | null;
+  anonId?: string | null;
 }): Promise<RankingSaveResult> {
   const chairCheck = await supabase
     .from('chairs')
@@ -120,6 +147,8 @@ export async function saveRankingScore({
     correct_answers: correctAnswers,
     questions_answered: questionsAnswered,
     created_at: new Date().toISOString(),
+    user_id: userId,
+    anon_id: userId ? null : anonId,
   };
 
   const { data, error } = await supabase.from('rankings').insert(payload).select('id').single();

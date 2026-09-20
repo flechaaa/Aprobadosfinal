@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Trophy, RefreshCw, Check, X, Swords, Home, Medal, GraduationCap, Download, Camera } from 'lucide-react';
 import { toBlob } from 'html-to-image';
 import { createChallenge } from '@/utils/game';
-import { saveRankingScore } from '@/utils/rankings';
+import { saveRankingScore, getRankingIdentity } from '@/utils/rankings';
 import { ensureTaxonomyFromSubmission } from '@/utils/moderation';
 import type { AnswerRecord, ChallengeData, Chair, Question, Subject, University } from '@/types';
 import type { TaxonomySelection } from '@/components/TaxonomyPicker';
@@ -387,6 +387,8 @@ export function ResultsScreen({
         chair: selectedChair,
       });
 
+      const identity = await getRankingIdentity();
+
       const result = await saveRankingScore({
         chairId: taxonomy.chairId,
         playerName: effectiveRankingName,
@@ -396,6 +398,8 @@ export function ResultsScreen({
         unit: selection?.unitId ?? null,
         correctAnswers: correctCount,
         questionsAnswered: answers.length,
+        userId: identity.userId,
+        anonId: identity.anonId,
       });
 
       setRankingPosition(result.position);
