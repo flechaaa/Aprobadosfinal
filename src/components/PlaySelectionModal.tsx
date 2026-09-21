@@ -291,6 +291,5 @@ export function PlaySelectionModal({
         </div>
         </div>
       </div>
-    </div>
   );
 }
