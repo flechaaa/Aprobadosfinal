@@ -173,9 +173,9 @@ export function PlaySelectionModal({
             ) : (
               <form onSubmit={handleSendMagicLink} className="space-y-3">
                 <div className="mb-1 text-center">
-                  <p className="font-bold text-gray-800">Ya jugaste tu partida gratis</p>
+                  <p className="font-bold text-gray-800">¡Registrate para participar del ranking y compartir con tus amigos!</p>
                   <p className="mt-1 text-sm text-gray-500">
-                    Registrate con tu email para seguir jugando — es gratis, sin necesidad de contraseña.
+                    Es gratis, sin necesidad de contraseña — solo tu email.
                   </p>
                 </div>
                 <input

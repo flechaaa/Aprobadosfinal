@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Trophy, RefreshCw, Check, X, Swords, Home, Medal, GraduationCap, Download, Camera } from 'lucide-react';
 import { toBlob } from 'html-to-image';
+import type { Session } from '@supabase/supabase-js';
+import { supabase } from '@/lib/supabase';
 import { createChallenge } from '@/utils/game';
 import { saveRankingScore, getRankingIdentity } from '@/utils/rankings';
 import { ensureTaxonomyFromSubmission } from '@/utils/moderation';
@@ -9,12 +11,7 @@ import type { TaxonomySelection } from '@/components/TaxonomyPicker';
 import { AdBanner } from './AdBanner';
 import { RankingModal } from '@/components/RankingModal';
 
-const RANKING_PLAYER_NAME_KEY = 'aprobados-ranking-player-name';
 const LOCAL_RANKING_KEY = 'aprobados-local-ranking';
-
-function isAnonymousPlayerName(name: string): boolean {
-  return !name.trim() || ['anonimo', 'anónimo'].includes(name.trim().toLocaleLowerCase());
-}
 
 interface ResultsScreenProps {
   answers: AnswerRecord[];
@@ -81,15 +78,24 @@ export function ResultsScreen({
   const [savingScore, setSavingScore] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [saveSuccess, setSaveSuccess] = useState(false);
-  const [rankingPlayerName, setRankingPlayerName] = useState(() => {
-    const savedName = localStorage.getItem(RANKING_PLAYER_NAME_KEY)?.trim();
-    return savedName || '';
-  });
-  const [namePromptOpen, setNamePromptOpen] = useState(() => {
-    const savedName = localStorage.getItem(RANKING_PLAYER_NAME_KEY)?.trim();
-    return !savedName || isAnonymousPlayerName(playerName);
-  });
-  const displayName = rankingPlayerName.trim() || playerAlias;
+
+  const [session, setSession] = useState<Session | null>(null);
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setSession(data.session));
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => setSession(newSession));
+    return () => listener.subscription.unsubscribe();
+  }, []);
+
+  const authDisplayName = (session?.user?.user_metadata?.display_name as string | undefined)?.trim() || '';
+  const [registerEmail, setRegisterEmail] = useState('');
+  const [registerMagicLinkSent, setRegisterMagicLinkSent] = useState(false);
+  const [registerError, setRegisterError] = useState('');
+  const [registerSending, setRegisterSending] = useState(false);
+  const [profileNameInput, setProfileNameInput] = useState('');
+  const [profileNameSaving, setProfileNameSaving] = useState(false);
+
+  const namePromptOpen = !session || !authDisplayName;
+  const displayName = authDisplayName || playerAlias;
   const [rankingOpen, setRankingOpen] = useState(false);
   const [rankingPosition, setRankingPosition] = useState<number | null>(null);
   const [downloadFallbackMessage, setDownloadFallbackMessage] = useState('');
@@ -343,17 +349,42 @@ export function ResultsScreen({
   const rating = getRating();
 
   const hasRankingChair = Boolean(selection?.chairId && selection.chairId !== 'all');
-  const effectiveRankingName = rankingPlayerName.trim();
+  const effectiveRankingName = authDisplayName;
 
-  const handleRankingNameSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSendRegisterLink = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const formData = new FormData(event.currentTarget);
-    const name = String(formData.get('ranking-name') ?? '').trim().slice(0, 50);
-    if (!name || isAnonymousPlayerName(name)) return;
+    if (!registerEmail.trim() || registerSending) return;
+    setRegisterSending(true);
+    setRegisterError('');
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email: registerEmail.trim(),
+        options: { emailRedirectTo: `${window.location.origin}${window.location.pathname}` },
+      });
+      if (error) throw error;
+      setRegisterMagicLinkSent(true);
+    } catch (err) {
+      setRegisterError(err instanceof Error ? err.message : 'No se pudo enviar el link. Probá de nuevo.');
+    } finally {
+      setRegisterSending(false);
+    }
+  };
 
-    localStorage.setItem(RANKING_PLAYER_NAME_KEY, name);
-    setRankingPlayerName(name);
-    setNamePromptOpen(false);
+  const handleSaveProfileName = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const name = profileNameInput.trim().slice(0, 50);
+    if (!name || profileNameSaving) return;
+    setProfileNameSaving(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ data: { display_name: name } });
+      if (error) throw error;
+      const { data } = await supabase.auth.getSession();
+      setSession(data.session);
+    } catch (err) {
+      console.error('No se pudo guardar el nombre de perfil:', err);
+    } finally {
+      setProfileNameSaving(false);
+    }
   };
 
   const handleSaveScore = useCallback(async () => {
@@ -728,23 +759,63 @@ export function ResultsScreen({
 
         {namePromptOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 px-4">
-            <form onSubmit={handleRankingNameSubmit} className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
-              <h2 className="text-xl font-extrabold text-gray-900">Guardá tu lugar en el ranking</h2>
-              <p className="mt-2 text-sm text-gray-600">Ingresá un nombre o apodo para registrar tu puntaje.</p>
-              <input
-                name="ranking-name"
-                type="text"
-                defaultValue={!isAnonymousPlayerName(playerName) ? playerName : ''}
-                autoFocus
-                maxLength={50}
-                required
-                placeholder="Tu nombre o apodo"
-                className="mt-4 w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-sm text-gray-800 outline-none focus:border-teal-500"
-              />
-              <button type="submit" className="mt-4 w-full rounded-xl bg-teal-600 px-4 py-3 font-bold text-white hover:bg-teal-700">
-                Guardar puntaje
-              </button>
-            </form>
+            <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
+              {!session ? (
+                registerMagicLinkSent ? (
+                  <div className="py-4 text-center">
+                    <Check className="mx-auto mb-3 h-10 w-10 text-teal-600" />
+                    <p className="font-bold text-gray-900">¡Listo! Revisá tu email</p>
+                    <p className="mt-1 text-sm text-gray-500">
+                      Te mandamos un link a <span className="font-semibold text-gray-700">{registerEmail}</span>. Abrilo para volver acá y guardar tu puntaje.
+                    </p>
+                  </div>
+                ) : (
+                  <form onSubmit={handleSendRegisterLink}>
+                    <h2 className="text-xl font-extrabold text-gray-900">¡Registrate para participar del ranking y compartir con tus amigos!</h2>
+                    <p className="mt-2 text-sm text-gray-600">Es gratis, sin necesidad de contraseña — solo tu email.</p>
+                    <input
+                      type="email"
+                      required
+                      autoFocus
+                      value={registerEmail}
+                      onChange={(event) => setRegisterEmail(event.target.value)}
+                      placeholder="tu@email.com"
+                      className="mt-4 w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-sm text-gray-800 outline-none focus:border-teal-500"
+                    />
+                    {registerError && <p className="mt-2 text-xs font-semibold text-red-600">{registerError}</p>}
+                    <button
+                      type="submit"
+                      disabled={registerSending || !registerEmail.trim()}
+                      className="mt-4 w-full rounded-xl bg-teal-600 px-4 py-3 font-bold text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {registerSending ? 'Enviando...' : 'Enviarme el link para entrar'}
+                    </button>
+                  </form>
+                )
+              ) : (
+                <form onSubmit={handleSaveProfileName}>
+                  <h2 className="text-xl font-extrabold text-gray-900">¿Cómo te llamás?</h2>
+                  <p className="mt-2 text-sm text-gray-600">Este nombre se guarda en tu cuenta y se usa en el ranking de ahora en más — no hace falta que lo vuelvas a escribir.</p>
+                  <input
+                    type="text"
+                    required
+                    autoFocus
+                    maxLength={50}
+                    value={profileNameInput}
+                    onChange={(event) => setProfileNameInput(event.target.value)}
+                    placeholder="Tu nombre o apodo"
+                    className="mt-4 w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-sm text-gray-800 outline-none focus:border-teal-500"
+                  />
+                  <button
+                    type="submit"
+                    disabled={profileNameSaving || !profileNameInput.trim()}
+                    className="mt-4 w-full rounded-xl bg-teal-600 px-4 py-3 font-bold text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {profileNameSaving ? 'Guardando...' : 'Guardar y continuar'}
+                  </button>
+                </form>
+              )}
+            </div>
           </div>
         )}
 
