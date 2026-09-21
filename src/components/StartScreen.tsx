@@ -1,8 +1,7 @@
 import { useState } from 'react';
-import { GraduationCap, Clock, Users, Trophy, Play, Swords, Upload, PlusCircle, Zap } from 'lucide-react';
+import { GraduationCap, Clock, Users, Trophy, Play, Swords, Upload, Zap } from 'lucide-react';
 import { CollaborateModal } from '@/components/CollaborateModal';
 import { RankingModal } from '@/components/RankingModal';
-import { QuestionSuggestionModal } from '@/components/QuestionSuggestionModal';
 import { PlaySelectionModal } from '@/components/PlaySelectionModal';
 import type { TaxonomySelection } from '@/components/TaxonomyPicker';
 import type { Chair, ChallengeData, Subject, University } from '@/types';
@@ -24,7 +23,6 @@ export function StartScreen({ onStart, onQuickGame, challengeData, universities,
   const [name, setName] = useState('');
   const [playOpen, setPlayOpen] = useState(false);
   const [collaborateOpen, setCollaborateOpen] = useState(false);
-  const [questionSuggestionOpen, setQuestionSuggestionOpen] = useState(false);
   const [rankingOpen, setRankingOpen] = useState(false);
 
   const handleOpenPlay = () => {
@@ -104,15 +102,6 @@ export function StartScreen({ onStart, onQuickGame, challengeData, universities,
 
             <button
               type="button"
-              onClick={() => setQuestionSuggestionOpen(true)}
-              className="w-full flex items-center justify-center gap-2 rounded-xl border-2 border-emerald-200 bg-emerald-50 py-3 text-sm font-bold text-emerald-700 transition hover:bg-emerald-100 active:scale-[0.98]"
-            >
-              <PlusCircle className="h-4 w-4" />
-              Proponer una nueva pregunta
-            </button>
-
-            <button
-              type="button"
               onClick={() => setCollaborateOpen(true)}
               className="w-full flex items-center justify-center gap-2 rounded-xl border-2 border-teal-200 bg-teal-50 py-3 text-sm font-bold text-teal-700 transition hover:bg-teal-100 active:scale-[0.98]"
             >
@@ -159,7 +148,11 @@ export function StartScreen({ onStart, onQuickGame, challengeData, universities,
       />
 
       <RankingModal open={rankingOpen} chairId={null} chairs={chairs} universities={universities} subjects={subjects} onClose={() => setRankingOpen(false)} />
-      <CollaborateModal open={collaborateOpen} onClose={() => setCollaborateOpen(false)} />
+      <CollaborateModal
+        open={collaborateOpen}
+        onClose={() => setCollaborateOpen(false)}
+        onSwitchToQuestionSuggestion={() => setQuestionSuggestionOpen(true)}
+      />
       <QuestionSuggestionModal
         open={questionSuggestionOpen}
         onClose={() => setQuestionSuggestionOpen(false)}

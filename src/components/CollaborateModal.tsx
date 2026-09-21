@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Upload, X, FileText, CheckCircle2, AlertCircle, Loader2, Bell } from 'lucide-react';
+import { Upload, X, FileText, CheckCircle2, AlertCircle, Loader2, Bell, Send } from 'lucide-react';
 import { submitTextSubmission, uploadSubmissions, validateFile, type MaterialType } from '@/utils/submissions';
+import { submitQuestionSuggestion } from '@/utils/questionSuggestions';
 import { notificationSupported, requestNotificationPermission, registerBrowserPushSubscription, getOrCreateSessionId } from '@/utils/notifications';
 import { supabase } from '@/lib/supabase';
 import { AutocompleteField } from '@/components/AutocompleteField';
@@ -18,6 +19,7 @@ const MATERIAL_OPTIONS: { value: MaterialType; label: string; description: strin
 ];
 
 export function CollaborateModal({ open, onClose }: CollaborateModalProps) {
+  const [mode, setMode] = useState<'material' | 'question'>('material');
   const [university, setUniversity] = useState('');
   const [subject, setSubject] = useState('');
   const [chair, setChair] = useState('');
@@ -35,6 +37,15 @@ export function CollaborateModal({ open, onClose }: CollaborateModalProps) {
   const [notifyWhenApproved, setNotifyWhenApproved] = useState(false);
   const [notifyStatus, setNotifyStatus] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Estado propio del modo "Proponer una pregunta"
+  const [questionAuthorName, setQuestionAuthorName] = useState('');
+  const [questionText, setQuestionText] = useState('');
+  const [questionOptions, setQuestionOptions] = useState<string[]>(['', '', '', '']);
+  const [questionCorrectOption, setQuestionCorrectOption] = useState(0);
+  const [questionSending, setQuestionSending] = useState(false);
+  const [questionError, setQuestionError] = useState('');
+  const [questionSuccess, setQuestionSuccess] = useState(false);
 
   const previewUrls = useMemo(
     () => files.map((file) => (file.type.startsWith('image/') ? URL.createObjectURL(file) : null)),
@@ -85,8 +96,10 @@ export function CollaborateModal({ open, onClose }: CollaborateModalProps) {
       : chairs;
   const chairSuggestions = chairCandidates
     .map((c) => c.name);
+  const matchedChair = chairCandidates.find((c) => normalize(c.name) === normalize(chair));
 
   const resetForm = useCallback(() => {
+    setMode('material');
     setUniversity('');
     setSubject('');
     setChair('');
@@ -99,13 +112,20 @@ export function CollaborateModal({ open, onClose }: CollaborateModalProps) {
     setProgress(0);
     setSuccess(false);
     setError('');
+    setQuestionAuthorName('');
+    setQuestionText('');
+    setQuestionOptions(['', '', '', '']);
+    setQuestionCorrectOption(0);
+    setQuestionError('');
+    setQuestionSuccess(false);
+    setQuestionSending(false);
   }, []);
 
   const handleClose = useCallback(() => {
-    if (uploading) return;
+    if (uploading || questionSending) return;
     resetForm();
     onClose();
-  }, [uploading, resetForm, onClose]);
+  }, [uploading, questionSending, resetForm, onClose]);
 
   const handleFiles = useCallback((selectedFiles: File[]) => {
     const invalidFile = selectedFiles.map((file) => ({ file, error: validateFile(file) })).find((item) => item.error);
@@ -195,6 +215,53 @@ export function CollaborateModal({ open, onClose }: CollaborateModalProps) {
     }
   };
 
+  const handleSubmitQuestion = async (event: React.FormEvent) => {
+    event.preventDefault();
+
+    if (!matchedUniversity || !matchedSubject || !matchedChair) {
+      setQuestionError('Elegí una universidad, materia y parcial que ya existan (para crear una clasificación nueva, subí un material en vez de proponer una pregunta puntual).');
+      return;
+    }
+
+    if (!questionText.trim()) {
+      setQuestionError('Escribí el enunciado de la pregunta.');
+      return;
+    }
+
+    const cleanOptions = questionOptions.map((option) => option.trim());
+    if (cleanOptions.some((option) => !option)) {
+      setQuestionError('Completá las cuatro opciones de respuesta.');
+      return;
+    }
+
+    try {
+      setQuestionSending(true);
+      setQuestionError('');
+      await submitQuestionSuggestion({
+        university_id: matchedUniversity.id,
+        subject_id: matchedSubject.id,
+        chair_id: matchedChair.id,
+        unit_name: hasUnit ? unit.trim() || null : null,
+        question_text: questionText.trim(),
+        options: cleanOptions,
+        correct_option: questionCorrectOption,
+        author_name: questionAuthorName.trim() || 'Anónimo',
+        status: 'pending',
+      });
+
+      setQuestionSuccess(true);
+      setTimeout(() => {
+        resetForm();
+        onClose();
+      }, 1200);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'No se pudo enviar la propuesta.';
+      setQuestionError(message);
+    } finally {
+      setQuestionSending(false);
+    }
+  };
+
   if (!open) return null;
 
   return (
@@ -207,7 +274,7 @@ export function CollaborateModal({ open, onClose }: CollaborateModalProps) {
           <h2 className="text-lg font-extrabold text-gray-900">Colaborar / Enviar material</h2>
           <button
             onClick={handleClose}
-            disabled={uploading}
+            disabled={uploading || questionSending}
             className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 disabled:opacity-30"
           >
             <X className="h-5 w-5" />
@@ -215,14 +282,37 @@ export function CollaborateModal({ open, onClose }: CollaborateModalProps) {
         </div>
 
         <div className="p-6 space-y-4">
-          {success ? (
+          {(mode === 'material' ? success : questionSuccess) ? (
             <div className="flex flex-col items-center py-8 text-center animate-pop-in">
               <CheckCircle2 className="h-14 w-14 text-teal-500 mb-4" />
-              <p className="text-lg font-bold text-gray-900">¡Material enviado!</p>
-              <p className="mt-1 text-sm text-gray-500">Gracias por colaborar. Tu aporte será revisado.</p>
+              <p className="text-lg font-bold text-gray-900">{mode === 'material' ? '¡Material enviado!' : '¡Gracias!'}</p>
+              <p className="mt-1 text-sm text-gray-500">
+                {mode === 'material' ? 'Gracias por colaborar. Tu aporte será revisado.' : 'Tu propuesta fue enviada con éxito.'}
+              </p>
             </div>
           ) : (
             <>
+              <div className="flex gap-2 rounded-xl bg-slate-100 p-1">
+                <button
+                  type="button"
+                  onClick={() => setMode('material')}
+                  className={`flex-1 rounded-lg py-2 text-xs font-bold transition ${
+                    mode === 'material' ? 'bg-white text-teal-700 shadow' : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  Subir material
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMode('question')}
+                  className={`flex-1 rounded-lg py-2 text-xs font-bold transition ${
+                    mode === 'question' ? 'bg-white text-teal-700 shadow' : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  Proponer una pregunta
+                </button>
+              </div>
+
               {/* Autocomplete fields for taxonomy */}
               <AutocompleteField
                 label="Universidad *"
@@ -279,6 +369,8 @@ export function CollaborateModal({ open, onClose }: CollaborateModalProps) {
                 )}
               </div>
 
+              {mode === 'material' ? (
+                <>
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1.5">
                   Notas / Año de la fuente
@@ -462,6 +554,96 @@ export function CollaborateModal({ open, onClose }: CollaborateModalProps) {
                   </>
                 )}
               </button>
+                </>
+              ) : (
+                <form onSubmit={handleSubmitQuestion} className="space-y-4">
+                  {(!matchedUniversity || !matchedSubject || !matchedChair) && (university || subject || chair) && (
+                    <p className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2 text-xs font-semibold text-amber-700">
+                      Para proponer una pregunta puntual, elegí una universidad, materia y parcial que ya existan en la lista de sugerencias.
+                    </p>
+                  )}
+
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1.5">Tu nombre o alias</label>
+                    <input
+                      type="text"
+                      value={questionAuthorName}
+                      onChange={(event) => setQuestionAuthorName(event.target.value)}
+                      placeholder="Anónimo"
+                      className="w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-sm text-gray-800 outline-none focus:border-teal-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1.5">Pregunta</label>
+                    <textarea
+                      value={questionText}
+                      onChange={(event) => setQuestionText(event.target.value)}
+                      rows={3}
+                      placeholder="Escribí el enunciado de la pregunta..."
+                      className="w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-sm text-gray-800 outline-none focus:border-teal-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">Opciones de respuesta</label>
+                    <div className="space-y-2">
+                      {questionOptions.map((option, idx) => (
+                        <div key={idx} className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setQuestionCorrectOption(idx)}
+                            className={`h-7 w-7 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                              questionCorrectOption === idx
+                                ? 'border-teal-600 bg-teal-600 text-white'
+                                : 'border-gray-300 text-transparent hover:border-teal-400'
+                            }`}
+                            title={questionCorrectOption === idx ? 'Opción correcta' : 'Marcar como correcta'}
+                          >
+                            {questionCorrectOption === idx && <CheckCircle2 className="h-4 w-4" />}
+                          </button>
+                          <input
+                            type="text"
+                            value={option}
+                            onChange={(event) => {
+                              const nextOptions = [...questionOptions];
+                              nextOptions[idx] = event.target.value;
+                              setQuestionOptions(nextOptions);
+                            }}
+                            placeholder={`Opción ${String.fromCharCode(65 + idx)}`}
+                            className="w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-sm text-gray-800 outline-none focus:border-teal-500"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {questionError && (
+                    <div className="flex items-start gap-2 rounded-xl border border-rose-300 bg-rose-50 px-4 py-3 text-xs font-bold text-rose-700">
+                      <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                      {questionError}
+                    </div>
+                  )}
+
+                  <button
+                    type="submit"
+                    disabled={questionSending}
+                    className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 py-4 font-bold text-white transition-all hover:from-teal-700 hover:to-emerald-700 active:scale-[0.98] shadow-lg disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
+                  >
+                    {questionSending ? (
+                      <>
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                        Enviando...
+                      </>
+                    ) : (
+                      <>
+                        <Send className="h-5 w-5" />
+                        Enviar propuesta
+                      </>
+                    )}
+                  </button>
+                </form>
+              )}
             </>
           )}
         </div>
