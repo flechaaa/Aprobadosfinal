@@ -151,14 +151,6 @@ export function StartScreen({ onStart, onQuickGame, challengeData, universities,
       <CollaborateModal
         open={collaborateOpen}
         onClose={() => setCollaborateOpen(false)}
-        onSwitchToQuestionSuggestion={() => setQuestionSuggestionOpen(true)}
-      />
-      <QuestionSuggestionModal
-        open={questionSuggestionOpen}
-        onClose={() => setQuestionSuggestionOpen(false)}
-        universities={universities}
-        subjects={subjects}
-        chairs={chairs}
       />
     </div>
   );
