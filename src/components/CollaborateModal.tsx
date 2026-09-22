@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Upload, X, FileText, CheckCircle2, AlertCircle, Loader2, Bell, Send } from 'lucide-react';
 import { submitTextSubmission, uploadSubmissions, validateFile, type MaterialType } from '@/utils/submissions';
+import { extractTextFromFileObject } from '@/utils/fileParser';
 import { submitQuestionSuggestion } from '@/utils/questionSuggestions';
 import { notificationSupported, requestNotificationPermission, registerBrowserPushSubscription, getOrCreateSessionId } from '@/utils/notifications';
 import { supabase } from '@/lib/supabase';
@@ -57,6 +58,46 @@ export function CollaborateModal({ open, onClose }: CollaborateModalProps) {
       if (url) URL.revokeObjectURL(url);
     });
   }, [previewUrls]);
+
+  const [previewModal, setPreviewModal] = useState<{
+    fileName: string;
+    kind: 'image' | 'pdf' | 'text';
+    url?: string;
+    text?: string;
+    loading: boolean;
+  } | null>(null);
+
+  const isPdfFile = (file: File) => file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+
+  const handleOpenPreview = useCallback(async (index: number) => {
+    const file = files[index];
+    if (!file) return;
+
+    if (file.type.startsWith('image/')) {
+      setPreviewModal({ fileName: file.name, kind: 'image', url: previewUrls[index] ?? URL.createObjectURL(file), loading: false });
+      return;
+    }
+
+    if (isPdfFile(file)) {
+      setPreviewModal({ fileName: file.name, kind: 'pdf', url: URL.createObjectURL(file), loading: false });
+      return;
+    }
+
+    setPreviewModal({ fileName: file.name, kind: 'text', loading: true });
+    try {
+      const text = await extractTextFromFileObject(file);
+      setPreviewModal({ fileName: file.name, kind: 'text', text: text.slice(0, 2000), loading: false });
+    } catch {
+      setPreviewModal({ fileName: file.name, kind: 'text', text: 'No se pudo generar una vista previa del contenido de este archivo.', loading: false });
+    }
+  }, [files, previewUrls]);
+
+  const handleClosePreview = useCallback(() => {
+    setPreviewModal((current) => {
+      if (current?.kind === 'pdf' && current.url) URL.revokeObjectURL(current.url);
+      return null;
+    });
+  }, []);
 
   // Estados de taxonomía inteligente
   const [universities, setUniversities] = useState<{ id: string; name: string }[]>([]);
@@ -473,6 +514,13 @@ export function CollaborateModal({ open, onClose }: CollaborateModalProps) {
                           )}
                           <p className="truncate px-2 pt-1 text-xs font-semibold text-gray-700">{selectedFile.name}</p>
                           <p className="px-2 pb-2 text-[10px] text-gray-400">{(selectedFile.size / 1024 / 1024).toFixed(1)} MB</p>
+                          <button
+                            type="button"
+                            onClick={(event) => { event.stopPropagation(); void handleOpenPreview(index); }}
+                            className="absolute bottom-8 left-1 rounded-full bg-white/90 px-2 py-1 text-[10px] font-bold text-teal-700 shadow hover:bg-teal-50"
+                          >
+                            Vista previa
+                          </button>
                           <button type="button" onClick={(event) => { event.stopPropagation(); setFiles((current) => current.filter((_, fileIndex) => fileIndex !== index)); }} className="absolute right-1 top-1 rounded-full bg-white/90 p-1 text-red-500 shadow" aria-label={`Quitar ${selectedFile.name}`}><X className="h-3.5 w-3.5" /></button>
                         </div>
                       ))}
@@ -648,6 +696,37 @@ export function CollaborateModal({ open, onClose }: CollaborateModalProps) {
           )}
         </div>
       </div>
+
+      {previewModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/80 px-4" onClick={handleClosePreview}>
+          <div className="w-full max-w-2xl max-h-[85vh] overflow-hidden rounded-2xl bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
+              <p className="truncate text-sm font-bold text-gray-800">{previewModal.fileName}</p>
+              <button type="button" onClick={handleClosePreview} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="max-h-[calc(85vh-52px)] overflow-y-auto">
+              {previewModal.kind === 'image' && previewModal.url && (
+                <img src={previewModal.url} alt={previewModal.fileName} className="mx-auto max-h-[75vh] w-auto object-contain" />
+              )}
+              {previewModal.kind === 'pdf' && previewModal.url && (
+                <iframe src={previewModal.url} title={previewModal.fileName} className="h-[75vh] w-full" />
+              )}
+              {previewModal.kind === 'text' && (
+                previewModal.loading ? (
+                  <div className="flex items-center justify-center gap-2 py-16 text-sm font-semibold text-gray-500">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Generando vista previa...
+                  </div>
+                ) : (
+                  <pre className="whitespace-pre-wrap break-words p-4 text-xs text-gray-700">{previewModal.text}</pre>
+                )
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
