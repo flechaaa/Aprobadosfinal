@@ -423,9 +423,12 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
         setProgressMsg(`Procesando fragmento ${current} de ${total}...`);
       }, selected.material_type);
 
-      if (result.error) {
-        setExtractError(result.error);
+      if (result.questions.length === 0) {
+        setExtractError(result.error || 'No se pudieron extraer preguntas.');
       } else {
+        if (result.error) {
+          setExtractError(result.error);
+        }
         const mapped = result.questions.map((q) => ({ ...q, approved: false }));
         setQuestions(mapped);
 

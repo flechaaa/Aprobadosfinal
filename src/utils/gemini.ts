@@ -305,6 +305,7 @@ export async function extractQuestionsFromFile(
     let questions: Question[] = [];
     let groqError = '';
     let geminiError = '';
+    let failedChunks = 0;
 
     for (const [index, chunk] of chunks.entries()) {
       onProgress?.(index + 1, chunks.length);
@@ -331,6 +332,9 @@ export async function extractQuestionsFromFile(
       }
 
       questions.push(...chunkQuestions);
+      if (chunkQuestions.length === 0) {
+        failedChunks += 1;
+      }
 
       if (index < chunks.length - 1) {
         await new Promise((resolve) => setTimeout(resolve, CHUNK_PAUSE_MS));
@@ -341,6 +345,13 @@ export async function extractQuestionsFromFile(
       return {
         questions: [],
         error: `No se pudieron extraer preguntas. Groq: ${groqError || 'no intentado'}. Gemini: ${geminiError || 'no intentado'}.`,
+      };
+    }
+
+    if (failedChunks > 0) {
+      return {
+        questions,
+        error: `Atención: se extrajeron ${questions.length} preguntas, pero ${failedChunks} de ${chunks.length} fragmento(s) fallaron y no se procesaron (Groq: ${groqError || 'sin detalle'}. Gemini: ${geminiError || 'sin detalle'}). Puede faltar contenido — revisá si conviene reprocesar el material.`,
       };
     }
 
