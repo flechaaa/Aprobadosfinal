@@ -5,6 +5,7 @@ import type { Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { createChallenge } from '@/utils/game';
 import { saveRankingScore, getRankingIdentity } from '@/utils/rankings';
+import { saveGameHistory, type GameHistoryQuestion } from '@/utils/gameHistory';
 import { ensureTaxonomyFromSubmission } from '@/utils/moderation';
 import type { AnswerRecord, ChallengeData, Chair, Question, Subject, University } from '@/types';
 import type { TaxonomySelection } from '@/components/TaxonomyPicker';
@@ -392,6 +393,19 @@ export function ResultsScreen({
       return;
     }
 
+    const historyQuestions: GameHistoryQuestion[] = questions.map((q, index) => {
+      const answer = answers[index];
+      return {
+        pregunta: q.pregunta,
+        opciones: q.opciones,
+        correcta: q.correcta,
+        explicacion: q.explicacion,
+        selectedIndex: answer?.selectedIndex ?? null,
+        correct: answer?.correct ?? false,
+        points: answer?.points ?? 0,
+      };
+    });
+
     if (!hasRankingChair) {
       let storedEntries: Array<{ id: string; player_name: string; score: number }> = [];
       try {
@@ -404,6 +418,16 @@ export function ResultsScreen({
       localStorage.setItem(LOCAL_RANKING_KEY, JSON.stringify(entries));
       setRankingPosition(entries.findIndex((entry) => entry.id === newEntry.id) + 1);
       setSaveSuccess(true);
+      void saveGameHistory({
+        universityName: selectedUniversity || null,
+        subjectName: selectedSubject || null,
+        chairName: selectedChair || null,
+        unit: selection?.unitId ?? null,
+        score: totalPoints,
+        correctAnswers: correctCount,
+        totalQuestions: answers.length,
+        questions: historyQuestions,
+      });
       return;
     }
 
@@ -435,6 +459,16 @@ export function ResultsScreen({
 
       setRankingPosition(result.position);
       setSaveSuccess(true);
+      void saveGameHistory({
+        universityName: selectedUniversity || null,
+        subjectName: selectedSubject || null,
+        chairName: selectedChair || null,
+        unit: selection?.unitId ?? null,
+        score: totalPoints,
+        correctAnswers: correctCount,
+        totalQuestions: answers.length,
+        questions: historyQuestions,
+      });
 
       if (onTaxonomyRefresh) {
         await Promise.resolve(onTaxonomyRefresh());
@@ -445,7 +479,7 @@ export function ResultsScreen({
     } finally {
       setSavingScore(false);
     }
-  }, [effectiveRankingName, hasRankingChair, onTaxonomyRefresh, saveSuccess, selectedChair, selectedSubject, selectedUniversity, selection, totalPoints]);
+  }, [answers, correctCount, effectiveRankingName, hasRankingChair, onTaxonomyRefresh, questions, saveSuccess, selectedChair, selectedSubject, selectedUniversity, selection, totalPoints]);
 
   useEffect(() => {
     void handleSaveScore();

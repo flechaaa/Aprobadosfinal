@@ -1,7 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { ensureTaxonomyFromSubmission } from '@/utils/moderation';
-import { extractQuestionFromImage } from '@/utils/gemini';
-import { extractQuestionsFromFile } from '@/utils/gemini';
+import { extractQuestionFromImage, extractQuestionsFromFile } from '@/utils/gemini';
 import { fetchAndExtractText } from '@/utils/fileParser';
 import { deleteSubmission } from '@/utils/submissions';
 
@@ -41,9 +40,6 @@ export interface QuestionSuggestionRecord {
   source_submission_id?: string | null;
   source_file_url?: string | null;
   source_storage_path?: string | null;
-  source_submission_id?: string | null;
-  source_file_url?: string | null;
-  source_storage_path?: string | null;
   university_name?: string;
   subject_name?: string;
   chair_name?: string;
@@ -79,7 +75,7 @@ function normalizeApprovedQuestion(suggestion: QuestionSuggestionRecord) {
 export async function submitQuestionSuggestion(payload: QuestionSuggestionPayload) {
   const safeQuestionText = payload.question_text.trim();
   const safeOptions = payload.options.map((option) => option.trim());
-  const safeAuthorName = (payload.author_name?.trim() || 'AnÃ³nimo').slice(0, 80);
+  const safeAuthorName = (payload.author_name?.trim() || 'Anónimo').slice(0, 80);
 
   if (!payload.university_id || !payload.subject_id || !payload.chair_id) {
     throw new Error('Seleccioná universidad, materia y cátedra antes de enviar.');
@@ -162,7 +158,6 @@ export async function processImageSubmission(input: {
     source_file_url: input.fileUrl,
     source_storage_path: input.storagePath ?? null,
   });
-
 }
 
 export async function processTextSubmission(input: {
@@ -284,15 +279,13 @@ export async function approveQuestionSuggestion(suggestion: QuestionSuggestionRe
       correct_option: normalizedQuestion.correctOption,
       explanation: normalizedQuestion.explanation,
       active: true,
+      is_active: true,
       subject_id: taxonomy.subjectId,
       chair_id: taxonomy.chairId,
-      unit: suggestion.unit_name?.trim() || null,
       university: universityName,
       subject: subjectName,
       chair: chairName,
       difficulty: normalizedQuestion.difficulty,
-      author_name: normalizedQuestion.authorName,
-      source_type: 'suggestion',
     },
   ]);
 
@@ -316,6 +309,8 @@ export async function approveQuestionSuggestion(suggestion: QuestionSuggestionRe
   if (updateError) {
     throw new Error(updateError.message || 'No se pudo marcar la propuesta como aprobada.');
   }
+
+  await cleanupSuggestionSourceIfUnused(suggestion, adminPassword ?? '');
 }
 
 export async function rejectQuestionSuggestion(suggestionId: string) {

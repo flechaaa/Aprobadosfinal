@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { GraduationCap, Clock, Users, Trophy, Play, Swords, Upload, Zap } from 'lucide-react';
+import { GraduationCap, Clock, Users, Trophy, Play, Swords, Upload, Zap, History } from 'lucide-react';
 import { CollaborateModal } from '@/components/CollaborateModal';
 import { RankingModal } from '@/components/RankingModal';
+import { GameHistoryModal } from '@/components/GameHistoryModal';
 import { PlaySelectionModal } from '@/components/PlaySelectionModal';
 import type { TaxonomySelection } from '@/components/TaxonomyPicker';
 import type { Chair, ChallengeData, Subject, University } from '@/types';
@@ -23,6 +24,7 @@ export function StartScreen({ onStart, onQuickGame, challengeData, universities,
   const [name, setName] = useState('');
   const [playOpen, setPlayOpen] = useState(false);
   const [collaborateOpen, setCollaborateOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [rankingOpen, setRankingOpen] = useState(false);
 
   const handleOpenPlay = () => {
@@ -108,6 +110,15 @@ export function StartScreen({ onStart, onQuickGame, challengeData, universities,
               <Upload className="h-4 w-4" />
               Enviar material
             </button>
+
+            <button
+              type="button"
+              onClick={() => setHistoryOpen(true)}
+              className="w-full flex items-center justify-center gap-2 rounded-xl border-2 border-teal-200 bg-teal-50 py-3 text-sm font-bold text-teal-700 transition hover:bg-teal-100 active:scale-[0.98]"
+            >
+              <History className="h-4 w-4" />
+              Mi historial
+            </button>
           </div>
 
           <button type="button" onClick={onOpenAdmin} className="mt-4 w-full text-xs font-bold text-gray-400 transition hover:text-teal-700">
@@ -148,6 +159,7 @@ export function StartScreen({ onStart, onQuickGame, challengeData, universities,
       />
 
       <RankingModal open={rankingOpen} chairId={null} chairs={chairs} universities={universities} subjects={subjects} onClose={() => setRankingOpen(false)} />
+      <GameHistoryModal open={historyOpen} onClose={() => setHistoryOpen(false)} />
       <CollaborateModal
         open={collaborateOpen}
         onClose={() => setCollaborateOpen(false)}
