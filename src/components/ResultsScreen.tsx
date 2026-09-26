@@ -81,13 +81,26 @@ export function ResultsScreen({
   const [saveSuccess, setSaveSuccess] = useState(false);
 
   const [session, setSession] = useState<Session | null>(null);
+  const [freshUser, setFreshUser] = useState<Session['user'] | null>(null);
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setSession(data.session));
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => setSession(newSession));
+    const syncUser = async () => {
+      const { data } = await supabase.auth.getSession();
+      setSession(data.session);
+      // getUser() confirma contra el servidor de Supabase en vez de confiar en la
+      // sesión cacheada del navegador, que puede haber quedado desactualizada
+      // (por ejemplo, con el display_name viejo si se guardó después del login).
+      const { data: userData } = await supabase.auth.getUser();
+      setFreshUser(userData.user ?? null);
+    };
+    void syncUser();
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      setSession(newSession);
+      supabase.auth.getUser().then(({ data }) => setFreshUser(data.user ?? null));
+    });
     return () => listener.subscription.unsubscribe();
   }, []);
 
-  const authDisplayName = (session?.user?.user_metadata?.display_name as string | undefined)?.trim() || '';
+  const authDisplayName = (freshUser?.user_metadata?.display_name as string | undefined)?.trim() || '';
   const [registerEmail, setRegisterEmail] = useState('');
   const [registerMagicLinkSent, setRegisterMagicLinkSent] = useState(false);
   const [registerError, setRegisterError] = useState('');
@@ -377,10 +390,11 @@ export function ResultsScreen({
     if (!name || profileNameSaving) return;
     setProfileNameSaving(true);
     try {
-      const { error } = await supabase.auth.updateUser({ data: { display_name: name } });
+      const { data, error } = await supabase.auth.updateUser({ data: { display_name: name } });
       if (error) throw error;
-      const { data } = await supabase.auth.getSession();
-      setSession(data.session);
+      setFreshUser(data.user ?? null);
+      const { data: sessionData } = await supabase.auth.getSession();
+      setSession(sessionData.session);
     } catch (err) {
       console.error('No se pudo guardar el nombre de perfil:', err);
     } finally {
