@@ -753,6 +753,8 @@ export function ResultsScreen({
               const selectedText = answer.selectedIndex === null
                 ? 'Sin respuesta'
                 : answer.selectedOption ?? answer.questionOptions[answer.selectedIndex] ?? 'Opción no disponible';
+              const questionData = questions[i];
+              const correctText = questionData ? questionData.opciones[questionData.correcta] : null;
 
               return (
                 <div key={i} className="flex items-start gap-3 p-3 rounded-xl bg-gray-50">
@@ -768,17 +770,27 @@ export function ResultsScreen({
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-800 line-clamp-2">
+                    <p className="text-sm font-medium text-gray-800">
                       {answer.questionText ?? 'Pregunta'}
                     </p>
-                    <p className="text-xs text-gray-500 mt-0.5">
+                    <p className="text-xs text-gray-500 mt-1">
                       {answer.correct
                         ? `Correcta \u2022 +${answer.points} pts`
-                        : `Incorrecta \u2022 ${selectedText}`}
+                        : 'Incorrecta'}
                     </p>
                     <p className="text-xs text-gray-500 mt-0.5">
                       Opción elegida: {selectedText}
                     </p>
+                    {!answer.correct && correctText && (
+                      <p className="text-xs font-semibold text-teal-700 mt-0.5">
+                        Respuesta correcta: {correctText}
+                      </p>
+                    )}
+                    {!answer.correct && questionData?.explicacion && (
+                      <p className="text-xs text-gray-600 mt-1.5 pt-1.5 border-t border-gray-200">
+                        {questionData.explicacion}
+                      </p>
+                    )}
                   </div>
                 </div>
               );
