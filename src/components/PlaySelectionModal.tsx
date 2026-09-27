@@ -44,18 +44,32 @@ export function PlaySelectionModal({
   const [unitName, setUnitName] = useState('');
 
   const [session, setSession] = useState<Session | null>(null);
+  const [freshUser, setFreshUser] = useState<Session['user'] | null>(null);
   const [email, setEmail] = useState('');
   const [magicLinkSent, setMagicLinkSent] = useState(false);
   const [authError, setAuthError] = useState('');
   const [sendingLink, setSendingLink] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setSession(data.session));
+    const syncUser = async () => {
+      const { data } = await supabase.auth.getSession();
+      setSession(data.session);
+      const { data: userData } = await supabase.auth.getUser();
+      setFreshUser(userData.user ?? null);
+    };
+    void syncUser();
     const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
       setSession(newSession);
+      supabase.auth.getUser().then(({ data }) => setFreshUser(data.user ?? null));
     });
     return () => listener.subscription.unsubscribe();
   }, []);
+
+  const authDisplayName = (freshUser?.user_metadata?.display_name as string | undefined)?.trim() || '';
+
+  useEffect(() => {
+    if (authDisplayName) setName(authDisplayName);
+  }, [authDisplayName]);
 
   const hasPlayedFreeGame =
     typeof window !== 'undefined' && localStorage.getItem('aprobados_has_played_free_game') === 'true';
@@ -199,15 +213,24 @@ export function PlaySelectionModal({
           ) : (
             <>
           <div>
-            <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-gray-500">Nombre</label>
-            <input
-              type="text"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              placeholder="¿Cómo te llamás?"
-              maxLength={20}
-              className="w-full rounded-xl border-2 border-gray-200 bg-white px-4 py-3 text-sm text-gray-800 outline-none transition-colors focus:border-teal-500"
-            />
+            {authDisplayName ? (
+              <div className="rounded-xl border-2 border-teal-100 bg-teal-50/50 px-4 py-3">
+                <p className="text-xs font-bold uppercase tracking-wide text-teal-600">Jugás como</p>
+                <p className="text-sm font-bold text-gray-800">{authDisplayName}</p>
+              </div>
+            ) : (
+              <>
+                <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-gray-500">Nombre</label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  placeholder="¿Cómo te llamás?"
+                  maxLength={20}
+                  className="w-full rounded-xl border-2 border-gray-200 bg-white px-4 py-3 text-sm text-gray-800 outline-none transition-colors focus:border-teal-500"
+                />
+              </>
+            )}
           </div>
 
           <AutocompleteField

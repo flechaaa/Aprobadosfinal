@@ -145,7 +145,7 @@ export async function saveRankingScore({
     subject_id: subjectId ?? chairCheck.data.subject_id,
     unit: unit?.trim() || null,
     correct_answers: correctAnswers,
-    questions_answered: questionsAnswered,
+    total_questions: questionsAnswered,
     created_at: new Date().toISOString(),
     user_id: userId,
     anon_id: userId ? null : anonId,
