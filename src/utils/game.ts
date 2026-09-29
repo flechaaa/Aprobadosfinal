@@ -194,6 +194,7 @@ export async function createChallenge(data: ChallengeData): Promise<string | nul
       questions: data.q,
       challenger_name: data.n,
       challenger_score: data.s,
+      challenger_correct: data.c ?? null,
       selection: data.selection ?? null,
     })
     .select('id')
@@ -210,7 +211,7 @@ export async function createChallenge(data: ChallengeData): Promise<string | nul
 export async function loadChallenge(id: string): Promise<ChallengeData | null> {
   const { data, error } = await supabase
     .from('challenges')
-    .select('questions, challenger_name, challenger_score, selection')
+    .select('questions, challenger_name, challenger_score, challenger_correct, selection')
     .eq('id', id)
     .single();
 
@@ -223,6 +224,7 @@ export async function loadChallenge(id: string): Promise<ChallengeData | null> {
     q: Array.isArray(data.questions) ? (data.questions as Question[]) : [],
     n: typeof data.challenger_name === 'string' ? data.challenger_name : 'Anónimo',
     s: typeof data.challenger_score === 'number' ? data.challenger_score : 0,
+    c: typeof data.challenger_correct === 'number' ? data.challenger_correct : undefined,
     selection: (data.selection as ChallengeData['selection']) ?? undefined,
   };
 }

@@ -200,6 +200,7 @@ export function ResultsScreen({
       q: questions,
       n: displayName,
       s: totalPoints,
+      c: correctCount,
       selection: selection
         ? {
             universityId: selection.universityId,
@@ -361,6 +362,14 @@ export function ResultsScreen({
   };
 
   const rating = getRating();
+
+  const starsFor = (correct: number) => {
+    if (correct === 5) return 5;
+    if (correct >= 3) return 4;
+    if (correct >= 2) return 3;
+    if (correct >= 1) return 2;
+    return 1;
+  };
 
   const hasRankingChair = Boolean(selection?.chairId && selection.chairId !== 'all');
   const effectiveRankingName = authDisplayName;
@@ -639,16 +648,49 @@ export function ResultsScreen({
                 </div>
               </div>
 
-              <div className="relative z-10 mt-8 flex items-end justify-between gap-4">
-                <div>
-                  <p className="text-xs font-black uppercase tracking-[0.2em] text-teal-100">Puntaje final</p>
-                  <p className="text-5xl font-black leading-none">{totalPoints}</p>
+              {isChallenge ? (
+                <div className="relative z-10 mt-8">
+                  <p className="text-center text-sm font-black leading-snug">
+                    {wonChallenge
+                      ? `🏆 ¡${displayName} le ganó a ${challengeData!.n}!`
+                      : tiedChallenge
+                        ? `${displayName} empató con ${challengeData!.n}`
+                        : `${challengeData!.n} le ganó a ${displayName}`}
+                  </p>
+                  <div className="mt-4 flex items-center justify-between gap-3">
+                    <div className="flex-1 text-center">
+                      <p className="truncate text-xs font-bold text-teal-100">{displayName}</p>
+                      <p className="text-3xl font-black leading-none">{totalPoints}</p>
+                      <p className="mt-1 text-sm tracking-wider text-amber-300">
+                        {'★'.repeat(starsFor(correctCount))}
+                        <span className="text-white/30">{'★'.repeat(5 - starsFor(correctCount))}</span>
+                      </p>
+                    </div>
+                    <p className="text-xs font-black text-teal-200">VS</p>
+                    <div className="flex-1 text-center">
+                      <p className="truncate text-xs font-bold text-teal-100">{challengeData!.n}</p>
+                      <p className="text-3xl font-black leading-none">{challengeData!.s}</p>
+                      {typeof challengeData!.c === 'number' && (
+                        <p className="mt-1 text-sm tracking-wider text-amber-300">
+                          {'★'.repeat(starsFor(challengeData!.c))}
+                          <span className="text-white/30">{'★'.repeat(5 - starsFor(challengeData!.c))}</span>
+                        </p>
+                      )}
+                    </div>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-xs font-black uppercase tracking-[0.2em] text-teal-100">Mi puesto</p>
-                  <p className="text-3xl font-black">#{rankingPosition ?? '\u2014'}</p>
+              ) : (
+                <div className="relative z-10 mt-8 flex items-end justify-between gap-4">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-[0.2em] text-teal-100">Puntaje final</p>
+                    <p className="text-5xl font-black leading-none">{totalPoints}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs font-black uppercase tracking-[0.2em] text-teal-100">Mi puesto</p>
+                    <p className="text-3xl font-black">#{rankingPosition ?? '\u2014'}</p>
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div className="relative z-10 mt-5 flex items-center justify-between gap-3 rounded-2xl bg-white/10 px-3 py-2">
                 <p className="text-[11px] font-bold uppercase tracking-wide text-teal-100 leading-tight">

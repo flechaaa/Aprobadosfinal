@@ -19,6 +19,7 @@ export interface ChallengeData {
   q: Question[]; // antes: number[] (índices) — ahora lleva el contenido real de las preguntas jugadas
   n: string;
   s: number;
+  c?: number; // respuestas correctas del desafiante (para mostrar sus estrellas)
   selection?: ChallengeSelectionPayload;
 }
 
