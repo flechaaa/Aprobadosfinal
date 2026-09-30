@@ -1,5 +1,8 @@
-import { useState } from 'react';
-import { GraduationCap, Clock, Users, Trophy, Play, Swords, Upload, Zap, History } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { GraduationCap, Clock, Users, Trophy, Play, Swords, Upload, Zap, History, Star } from 'lucide-react';
+import type { Session } from '@supabase/supabase-js';
+import { supabase } from '@/lib/supabase';
+import { loadUserStats, type UserStats } from '@/utils/gameHistory';
 import { CollaborateModal } from '@/components/CollaborateModal';
 import { RankingModal } from '@/components/RankingModal';
 import { GameHistoryModal } from '@/components/GameHistoryModal';
@@ -27,6 +30,31 @@ export function StartScreen({ onStart, onQuickGame, challengeData, universities,
   const [historyOpen, setHistoryOpen] = useState(false);
   const [rankingOpen, setRankingOpen] = useState(false);
 
+  const [freshUser, setFreshUser] = useState<Session['user'] | null>(null);
+  const [userStats, setUserStats] = useState<UserStats | null>(null);
+
+  useEffect(() => {
+    const syncUser = async () => {
+      const { data } = await supabase.auth.getUser();
+      setFreshUser(data.user ?? null);
+    };
+    void syncUser();
+    const { data: listener } = supabase.auth.onAuthStateChange(() => {
+      supabase.auth.getUser().then(({ data }) => setFreshUser(data.user ?? null));
+    });
+    return () => listener.subscription.unsubscribe();
+  }, []);
+
+  const authDisplayName = (freshUser?.user_metadata?.display_name as string | undefined)?.trim() || '';
+
+  useEffect(() => {
+    if (!authDisplayName) {
+      setUserStats(null);
+      return;
+    }
+    void loadUserStats().then(setUserStats);
+  }, [authDisplayName]);
+
   const handleOpenPlay = () => {
     setPlayOpen(true);
   };
@@ -42,6 +70,26 @@ export function StartScreen({ onStart, onQuickGame, challengeData, universities,
       <div className="absolute bottom-0 -right-20 w-96 h-96 bg-emerald-400/20 rounded-full blur-3xl" />
 
       <div className="w-full max-w-md relative z-10">
+        {authDisplayName && userStats && (
+          <div className="mb-4 flex justify-end">
+            <div className="flex items-center gap-3 rounded-2xl bg-white/15 backdrop-blur-sm border border-white/20 px-4 py-2.5">
+              <div className="text-right">
+                <p className="text-sm font-bold text-white leading-tight">{authDisplayName}</p>
+                <div className="mt-0.5 flex items-center justify-end gap-2 text-[11px] text-teal-50/90">
+                  <span className="inline-flex items-center gap-0.5">
+                    <Star className="h-3 w-3 fill-amber-300 text-amber-300" />
+                    {userStats.averageStars.toFixed(1)}
+                  </span>
+                  <span>·</span>
+                  <span className="font-bold">{userStats.totalScore} pts</span>
+                  <span>·</span>
+                  <span>{userStats.totalCorrect}/{userStats.totalQuestions} bien</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-20 h-20 bg-white/10 backdrop-blur-sm rounded-3xl mb-4 border border-white/20 animate-float shadow-xl">
             <GraduationCap className="w-10 h-10 text-white" />
