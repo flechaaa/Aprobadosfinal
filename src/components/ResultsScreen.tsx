@@ -828,7 +828,7 @@ export function ResultsScreen({
                         Respuesta correcta: {correctText}
                       </p>
                     )}
-                    {!answer.correct && questionData?.explicacion && (
+                    {questionData?.explicacion && (
                       <p className="text-xs text-gray-600 mt-1.5 pt-1.5 border-t border-gray-200">
                         {questionData.explicacion}
                       </p>
