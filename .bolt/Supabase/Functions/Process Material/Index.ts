@@ -13,6 +13,10 @@ interface Question {
   explicacion: string;
 }
 
+function isTokenOrQuotaError(message: string): boolean {
+  return /429|quota|cuota|token|resource_exhausted|rate limit|too many requests/i.test(message);
+}
+
 function detectIsPreguntero(text: string): boolean {
   const matchOptions = (text.match(/(?:^[a-dA-D][\)\.-]|\([a-dA-D]\))/gm) || []).length;
   const matchQuestions = (text.match(/(?:\d+[\)\.-]|\¿)/gm) || []).length;
@@ -126,7 +130,7 @@ async function processSubmissionJob(submissionId: string, fileUrl: string) {
   try {
     await supabase
       .from("submissions")
-      .update({ status: "processing" })
+      .update({ status: "pending", processing_status: "procesando", processing_error: null })
       .eq("id", submissionId);
 
     const fileRes = await fetch(fileUrl);
@@ -162,17 +166,22 @@ async function processSubmissionJob(submissionId: string, fileUrl: string) {
       .from("submissions")
       .update({
         extracted_questions: allQuestions,
-        status: "ready_for_review",
+        status: "pending",
+        processed: true,
+        processing_status: "procesado",
         processing_error: null,
       })
       .eq("id", submissionId);
 
   } catch (err: any) {
+    const message = err.message || "Error desconocido";
     await supabase
       .from("submissions")
       .update({
-        status: "failed",
-        processing_error: err.message || "Error desconocido",
+        status: "pending",
+        processed: false,
+        processing_status: isTokenOrQuotaError(message) ? "error_tokens" : "error",
+        processing_error: message,
       })
       .eq("id", submissionId);
   }

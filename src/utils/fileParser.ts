@@ -1,5 +1,6 @@
 import JSZip from 'jszip';
 import * as pdfjsLib from 'pdfjs-dist';
+import { createWorker } from 'tesseract.js';
 
 // Configuración del worker de PDF.js vía CDN compatible con Vite
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
@@ -38,11 +39,48 @@ export async function parsePptx(buffer: ArrayBuffer): Promise<string> {
   return fullText.trim();
 }
 
-// Extrae texto de PDF
+const PDF_OCR_MIN_TEXT_LENGTH = 40;
+const PDF_OCR_SCALE = 2;
+
+async function recognizePdfPage(page: pdfjsLib.PDFPageProxy, worker: Awaited<ReturnType<typeof createWorker>>): Promise<string> {
+  const viewport = page.getViewport({ scale: PDF_OCR_SCALE });
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.ceil(viewport.width);
+  canvas.height = Math.ceil(viewport.height);
+  const context = canvas.getContext('2d');
+
+  if (!context) throw new Error('No se pudo crear el canvas para OCR.');
+
+  await page.render({ canvas, canvasContext: context, viewport }).promise;
+  const result = await worker.recognize(canvas);
+  return result.data.text.trim();
+}
+
+export async function parseImage(image: Blob): Promise<string> {
+  const worker = await createWorker('spa');
+  try {
+    const result = await worker.recognize(image);
+    return result.data.text.trim();
+  } finally {
+    await worker.terminate();
+  }
+}
+
+function pageHasImages(operatorList: { fnArray: number[] }): boolean {
+  const imageOperators = new Set([
+    pdfjsLib.OPS.paintImageMaskXObject,
+    pdfjsLib.OPS.paintImageXObject,
+    pdfjsLib.OPS.paintXObject,
+  ]);
+  return operatorList.fnArray.some((operator: number) => imageOperators.has(operator));
+}
+
+// Extrae texto de PDF y aplica OCR en páginas escaneadas o con imágenes.
 export async function parsePdf(buffer: ArrayBuffer): Promise<string> {
   const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(buffer) });
   const pdf = await loadingTask.promise;
   let fullText = '';
+  const pagesForOcr: Array<{ page: pdfjsLib.PDFPageProxy; pageNum: number }> = [];
 
   for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
     const page = await pdf.getPage(pageNum);
@@ -51,6 +89,29 @@ export async function parsePdf(buffer: ArrayBuffer): Promise<string> {
       .map((item: any) => ('str' in item ? item.str : ''))
       .join(' ');
     fullText += `\n--- Página ${pageNum} ---\n${pageString}`;
+
+    const operatorList = await page.getOperatorList();
+    if (pageString.trim().length < PDF_OCR_MIN_TEXT_LENGTH || pageHasImages(operatorList)) {
+      pagesForOcr.push({ page, pageNum });
+    }
+  }
+
+  if (pagesForOcr.length === 0) return fullText.trim();
+
+  const worker = await createWorker('spa');
+  try {
+    for (const { page, pageNum } of pagesForOcr) {
+      try {
+        const ocrText = await recognizePdfPage(page, worker);
+        if (ocrText) {
+          fullText += `\n--- OCR página ${pageNum} ---\n${ocrText}`;
+        }
+      } catch (error) {
+        console.warn(`No se pudo aplicar OCR a la página ${pageNum}:`, error);
+      }
+    }
+  } finally {
+    await worker.terminate();
   }
 
   return fullText.trim();
@@ -75,6 +136,10 @@ export async function extractTextFromFileObject(file: File): Promise<string> {
 
   if (file.type.includes('text/plain') || lowerName.endsWith('.txt')) {
     return await file.text();
+  }
+
+  if (file.type.startsWith('image/') || /\.(png|jpe?g)$/i.test(lowerName)) {
+    return await parseImage(file);
   }
 
   const arrayBuffer = await file.arrayBuffer();

@@ -63,9 +63,9 @@ async function uploadSingleSubmission(input: SubmissionInput): Promise<Submissio
     } catch (error) {
       throw new Error(error instanceof Error ? error.message : 'Error al procesar el archivo pesado.');
     }
-  } else if (!isImage) {
-    // Pre-extraemos el texto en el cliente para que el procesamiento automático
-    // con IA (Edge Function) no tenga que parsear PDF/PPTX/DOCX en el servidor.
+  } else {
+    // Pre-extraemos texto para que el procesamiento automático conserve una
+    // copia cruda y no dependa de volver a interpretar el archivo remoto.
     try {
       processedText = input.file.type === 'text/plain'
         ? await input.file.text()

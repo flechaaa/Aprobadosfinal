@@ -73,7 +73,12 @@ export interface Submission {
   storage_path?: string | null;
   file_type: string;
   processed: boolean;
-  processing_status?: 'pendiente_procesamiento' | 'procesando' | 'procesado' | 'error';
+  status?: 'pending' | 'processed' | 'dismissed';
+  processing_status?: 'pendiente_procesamiento' | 'procesando' | 'procesado' | 'error' | 'error_tokens';
+  processing_error?: string | null;
+  processing_attempts?: number;
+  processing_started_at?: string | null;
+  processed_at?: string | null;
   processed_text?: string | null;
   extracted_questions?: Question[];
 }

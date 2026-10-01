@@ -26,6 +26,8 @@ import {
   insertBatchQuestions,
   markSubmissionProcessed,
   ensureTaxonomyFromSubmission,
+  retrySubmissionProcessing,
+  storeSubmissionProcessingResult,
   type Submission,
 } from '@/utils/moderation';
 import { extractQuestionFromImage, extractQuestionsFromFile } from '@/utils/gemini';
@@ -77,7 +79,20 @@ const materialTypeLabels: Record<string, string> = {
   apunte: 'Apunte / Resumen teórico',
   preguntero_choice: 'Preguntero / Choice',
   pregunta_respuesta: 'Preguntas con Respuesta',
+  texto: 'Texto',
 };
+
+const processingStatusLabels: Record<Submission['processing_status'], string> = {
+  pendiente_procesamiento: 'Pendiente',
+  procesando: 'Procesando',
+  procesado: 'Procesado',
+  error: 'Error',
+  error_tokens: 'Error de tokens',
+};
+
+function isTokenProcessingError(message: string): boolean {
+  return /429|quota|cuota|token|resource_exhausted|rate limit|too many requests|context length|maximum.*tokens|input.*too long|http 413/i.test(message);
+}
 
 type Tab = 'taxonomy' | 'materials' | 'reports' | 'questions';
 
@@ -116,6 +131,10 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
   const [loadingQuestionSuggestions, setLoadingQuestionSuggestions] = useState(false);
 
   const selected = submissions.find((s) => s.id === selectedId) ?? null;
+  const selectedFileType = selected?.file_type.toLowerCase() ?? '';
+  const canPreviewSelectedFile = selectedFileType.startsWith('image/')
+    || selectedFileType.includes('pdf')
+    || selectedFileType.includes('text/plain');
 
   const fetchQuestionSuggestions = useCallback(async () => {
     setLoadingQuestionSuggestions(true);
@@ -405,13 +424,15 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
   };
 
   const handleExtract = async () => {
-    if (!selected || !selected.file_url) return;
+    if (!selected || (!selected.file_url && !selected.processed_text)) return;
     setExtracting(true);
     setExtractError('');
     setProgressMsg('Leyendo archivo y extrayendo texto...');
     setQuestions([]);
     try {
-      const rawText = await fetchAndExtractText(selected.file_url, selected.file_type);
+      await retrySubmissionProcessing(selected.id, adminPassword);
+      const rawText = selected.processed_text
+        || (selected.file_url ? await fetchAndExtractText(selected.file_url, selected.file_type) : '');
 
       if (!rawText || rawText.trim().length < 20) {
         throw new Error('El archivo no contiene texto legible (puede ser un escaneo o imágenes sin OCR).');
@@ -425,6 +446,13 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
 
       if (result.questions.length === 0) {
         setExtractError(result.error || 'No se pudieron extraer preguntas.');
+        await storeSubmissionProcessingResult({
+          submissionId: selected.id,
+          processedText: rawText,
+          processingStatus: isTokenProcessingError(result.error || '') ? 'error_tokens' : 'error',
+          processingError: result.error,
+          adminPassword,
+        });
       } else {
         if (result.error) {
           setExtractError(result.error);
@@ -432,17 +460,36 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
         const mapped = result.questions.map((q) => ({ ...q, approved: false }));
         setQuestions(mapped);
 
-        await supabase
-          .from('submissions')
-          .update({ extracted_questions: result.questions })
-          .eq('id', selected.id);
+        const processingStatus = result.error
+          ? (isTokenProcessingError(result.error) ? 'error_tokens' : 'error')
+          : 'procesado';
+        await storeSubmissionProcessingResult({
+          submissionId: selected.id,
+          extractedQuestions: result.questions,
+          processedText: rawText,
+          processingStatus,
+          processingError: result.error,
+          adminPassword,
+        });
 
         setSubmissions((prev) =>
-          prev.map((s) => (s.id === selected.id ? { ...s, extracted_questions: result.questions } : s))
+          prev.map((s) => (s.id === selected.id
+            ? { ...s, extracted_questions: result.questions, processed_text: rawText, processing_status: processingStatus, processing_error: result.error ?? null }
+            : s))
         );
       }
     } catch (err: any) {
       setExtractError(err.message || 'No se pudo procesar el material.');
+      try {
+        await storeSubmissionProcessingResult({
+          submissionId: selected.id,
+          processingStatus: isTokenProcessingError(err.message || '') ? 'error_tokens' : 'error',
+          processingError: err.message,
+          adminPassword,
+        });
+      } catch (saveError) {
+        console.error('No se pudo guardar el error de procesamiento:', saveError);
+      }
     } finally {
       setExtracting(false);
       setProgressMsg('');
@@ -459,9 +506,26 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
       const question = await extractQuestionFromImage(selected.file_url, selected.file_type);
       const nextQuestion = { ...question, approved: false };
       setQuestions([nextQuestion]);
+      await storeSubmissionProcessingResult({
+        submissionId: selected.id,
+        extractedQuestions: [question],
+        processingStatus: 'procesado',
+        adminPassword,
+      });
       setMessage('Pregunta autocompletada. Revisala antes de aprobarla.');
     } catch (error) {
       setExtractError(error instanceof Error ? error.message : 'No se pudo procesar la imagen con IA.');
+      const message = error instanceof Error ? error.message : String(error);
+      try {
+        await storeSubmissionProcessingResult({
+          submissionId: selected.id,
+          processingStatus: isTokenProcessingError(message) ? 'error_tokens' : 'error',
+          processingError: message,
+          adminPassword,
+        });
+      } catch (saveError) {
+        console.error('No se pudo guardar el error de procesamiento:', saveError);
+      }
     } finally {
       setProcessingImage(false);
       setProgressMsg('');
@@ -1003,7 +1067,7 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
           )}
           {submissions.length > 0 && (
             <div className="bg-white border-b border-gray-200 px-4 py-2.5 flex items-center gap-2 overflow-x-auto scrollbar-hide">
-              <span className="text-xs font-bold uppercase tracking-wide text-gray-400 flex-shrink-0">Pendientes:</span>
+              <span className="text-xs font-bold uppercase tracking-wide text-gray-400 flex-shrink-0">Materiales:</span>
               {submissions.map((s) => (
                 <div key={s.id} className="flex flex-shrink-0 items-center gap-1 rounded-lg bg-gray-100 pl-3 text-xs font-semibold text-gray-600">
                   <button
@@ -1012,9 +1076,9 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
                     className={`rounded-lg py-1.5 pr-1 text-left transition ${s.id === selectedId ? 'text-teal-700' : 'hover:text-teal-700'}`}
                   >
                     {s.subject} — {s.chair}
-                    {autoProcessingIds.includes(s.id) && (
-                      <span className="ml-1.5 text-[10px] font-bold text-emerald-600">Procesando IA...</span>
-                    )}
+                    <span className="ml-1.5 rounded-full bg-white px-1.5 py-0.2 text-[10px] font-bold text-gray-500">
+                      {processingStatusLabels[s.processing_status] ?? (s.processed ? 'Procesado' : 'Pendiente')}
+                    </span>
                     {s.extracted_questions && s.extracted_questions.length > 0 && (
                       <span className="ml-1.5 rounded-full bg-white px-1.5 py-0.2 text-[10px]">{s.extracted_questions.length}</span>
                     )}
@@ -1053,11 +1117,20 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
                       <span className="text-xs text-gray-400">Â·</span>
                       <span className="text-xs text-gray-500">{materialTypeLabels[selected.material_type] ?? selected.material_type}</span>
                       <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700">
-                        {selected.processing_status ?? (selected.processed ? 'procesado' : 'pendiente_procesamiento')}
+                        {processingStatusLabels[selected.processing_status] ?? (selected.processed ? 'Procesado' : 'Pendiente')}
                       </span>
                     </div>
 
                     <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => void (selected.material_type === 'texto' || !selected.file_type.startsWith('image/') ? handleExtract() : handleProcessImage())}
+                        disabled={extracting || processingImage || busy || (!selected.file_url && !selected.processed_text)}
+                        className="flex items-center gap-1 text-xs font-bold text-emerald-600 hover:text-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <Sparkles className="h-3.5 w-3.5" />
+                        {selected.processing_status === 'error' || selected.processing_status === 'error_tokens' ? 'Reintentar procesamiento' : 'Procesar ahora'}
+                      </button>
                       {selected.file_url && <a
                         href={selected.file_url}
                         target="_blank"
@@ -1087,12 +1160,16 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
                     <div className="h-full overflow-y-auto rounded-lg bg-white p-4 text-sm whitespace-pre-wrap text-gray-700">{selected.processed_text}</div>
                   ) : selected.file_url && selected.file_type.startsWith('image/') ? (
                     <img src={selected.file_url} alt="Material" className="w-full h-full object-contain rounded-lg" />
-                  ) : selected.file_url ? (
+                  ) : selected.file_url && canPreviewSelectedFile ? (
                     <iframe
                       src={selected.file_url}
                       title="Visor de documento"
                       className="w-full h-full rounded-lg border border-gray-200 bg-white"
                     />
+                  ) : selected.file_url ? (
+                    <div className="flex h-full items-center justify-center rounded-lg bg-white p-6 text-center text-sm text-gray-500">
+                      Este formato no se puede previsualizar dentro del panel. Usa "Abrir en otra pestana" para verlo o descargarlo manualmente.
+                    </div>
                   ) : (
                     <div className="flex h-full items-center justify-center rounded-lg bg-white p-6 text-center text-sm text-gray-500">Este envío no tiene archivo asociado.</div>
                   )}

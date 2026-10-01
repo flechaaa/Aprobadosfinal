@@ -177,6 +177,10 @@ async function throwGeminiResponseError(response: Response, operation: string): 
   throw new Error(`Gemini HTTP ${response.status} al ${operation}: ${errorText}`);
 }
 
+function isTokenOrQuotaError(message: string): boolean {
+  return /429|quota|cuota|token|resource_exhausted|rate limit|too many requests|context length|maximum.*tokens|input.*too long|http 413/i.test(message);
+}
+
 // ============================================================
 // Groq (idéntico a callGroq del frontend)
 // ============================================================
@@ -355,12 +359,19 @@ Deno.serve(async (req) => {
       return new Response('Payload inválido', { status: 400 });
     }
 
-    await supabase.from('submissions').update({ processing_status: 'procesando' }).eq('id', submissionId);
+    await supabase.from('submissions').update({
+      status: 'pending',
+      processed: false,
+      processing_status: 'procesando',
+      processing_error: null,
+      processing_attempts: (submission.processing_attempts ?? 0) + 1,
+      processing_started_at: new Date().toISOString(),
+    }).eq('id', submissionId);
 
     const isImage = (submission.file_type ?? '').startsWith('image/');
     let extracted: ExtractedQuestion[] = [];
 
-    if (isImage) {
+    if (isImage && !(submission.processed_text ?? '').trim()) {
       extracted = [await extractQuestionFromImage(submission.file_url)];
     } else {
       const text: string | null = submission.processed_text;
@@ -375,19 +386,24 @@ Deno.serve(async (req) => {
 
       let groqError = '';
       let geminiError = '';
+      let tokenLimitError = '';
 
       for (const [index, chunk] of chunks.entries()) {
         let chunkQuestions: ExtractedQuestion[] = [];
+        let chunkGroqError = '';
+        let chunkGeminiError = '';
 
         if (GROQ_API_KEY) {
           try {
             chunkQuestions = await callGroq(chunk, prompt);
           } catch (err) {
             console.warn(`[AI] Falló Groq en fragmento ${index + 1}/${chunks.length}, derivando a Gemini:`, err);
-            groqError = err instanceof Error ? err.message : String(err);
+            chunkGroqError = err instanceof Error ? err.message : String(err);
+            groqError = chunkGroqError;
           }
         } else {
-          groqError = 'GROQ_API_KEY no configurada.';
+          chunkGroqError = 'GROQ_API_KEY no configurada.';
+          groqError = chunkGroqError;
         }
 
         if (chunkQuestions.length === 0 && GEMINI_API_KEY) {
@@ -395,8 +411,14 @@ Deno.serve(async (req) => {
             chunkQuestions = await callGemini(chunk, prompt);
           } catch (err) {
             console.error(`[AI] Falló Gemini en fragmento ${index + 1}/${chunks.length}:`, err);
-            geminiError = err instanceof Error ? err.message : String(err);
+            chunkGeminiError = err instanceof Error ? err.message : String(err);
+            geminiError = chunkGeminiError;
           }
+        }
+
+        const chunkError = `${chunkGroqError} ${chunkGeminiError}`;
+        if (chunkQuestions.length === 0 && isTokenOrQuotaError(chunkError)) {
+          tokenLimitError = chunkError;
         }
 
         extracted.push(...chunkQuestions);
@@ -404,6 +426,10 @@ Deno.serve(async (req) => {
         if (index < chunks.length - 1) {
           await new Promise((resolve) => setTimeout(resolve, CHUNK_PAUSE_MS));
         }
+      }
+
+      if (tokenLimitError) {
+        throw new Error(`El procesamiento quedó pendiente por límites de la IA: ${tokenLimitError}`);
       }
 
       if (extracted.length === 0) {
@@ -436,6 +462,7 @@ Deno.serve(async (req) => {
       processing_status: 'procesado',
       processed: true,
       processing_error: null,
+      processed_at: new Date().toISOString(),
     }).eq('id', submissionId);
 
     return new Response(JSON.stringify({ ok: true, count: rows.length }), {
@@ -445,9 +472,12 @@ Deno.serve(async (req) => {
   } catch (error) {
     console.error('Error procesando submission:', error);
     if (submissionId) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
       await supabase.from('submissions').update({
-        processing_status: 'error',
-        processing_error: error instanceof Error ? error.message : String(error),
+        status: 'pending',
+        processed: false,
+        processing_status: isTokenOrQuotaError(errorMessage) ? 'error_tokens' : 'error',
+        processing_error: errorMessage,
       }).eq('id', submissionId);
     }
     return new Response(JSON.stringify({ ok: false, error: String(error) }), {

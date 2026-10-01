@@ -107,6 +107,10 @@ async function throwGeminiResponseError(response: Response, operation: string): 
   throw new Error(`Gemini HTTP ${response.status} al ${operation}: ${errorText}`);
 }
 
+function isTokenOrQuotaError(message: string): boolean {
+  return /429|quota|cuota|token|resource_exhausted|rate limit|too many requests/i.test(message);
+}
+
 // ============================================================
 // Groq (idéntico a callGroq del frontend)
 // ============================================================
@@ -285,7 +289,14 @@ Deno.serve(async (req) => {
       return new Response('Payload inválido', { status: 400 });
     }
 
-    await supabase.from('submissions').update({ processing_status: 'procesando' }).eq('id', submissionId);
+    await supabase.from('submissions').update({
+      status: 'pending',
+      processed: false,
+      processing_status: 'procesando',
+      processing_error: null,
+      processing_attempts: (submission.processing_attempts ?? 0) + 1,
+      processing_started_at: new Date().toISOString(),
+    }).eq('id', submissionId);
 
     const isImage = (submission.file_type ?? '').startsWith('image/');
     let extracted: ExtractedQuestion[] = [];
@@ -352,6 +363,7 @@ Deno.serve(async (req) => {
       processing_status: 'procesado',
       processed: true,
       processing_error: null,
+      processed_at: new Date().toISOString(),
     }).eq('id', submissionId);
 
     return new Response(JSON.stringify({ ok: true, count: rows.length }), {
@@ -361,9 +373,12 @@ Deno.serve(async (req) => {
   } catch (error) {
     console.error('Error procesando submission:', error);
     if (submissionId) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
       await supabase.from('submissions').update({
-        processing_status: 'error',
-        processing_error: error instanceof Error ? error.message : String(error),
+        status: 'pending',
+        processed: false,
+        processing_status: isTokenOrQuotaError(errorMessage) ? 'error_tokens' : 'error',
+        processing_error: errorMessage,
       }).eq('id', submissionId);
     }
     return new Response(JSON.stringify({ ok: false, error: String(error) }), {
