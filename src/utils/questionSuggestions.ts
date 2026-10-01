@@ -45,33 +45,6 @@ export interface QuestionSuggestionRecord {
   chair_name?: string;
 }
 
-function normalizeApprovedQuestion(suggestion: QuestionSuggestionRecord) {
-  const questionText = suggestion.question_text?.trim() ?? '';
-  const options = Array.isArray(suggestion.options)
-    ? suggestion.options.map((option) => (typeof option === 'string' ? option.trim() : '')).filter(Boolean)
-    : [];
-  const correctOption = Number(suggestion.correct_option);
-
-  if (
-    questionText.length < 10 ||
-    options.length !== 4 ||
-    !Number.isInteger(correctOption) ||
-    correctOption < 0 ||
-    correctOption > 3
-  ) {
-    throw new Error('La pregunta debe tener enunciado, exactamente 4 opciones y una respuesta válida.');
-  }
-
-  return {
-    questionText,
-    options,
-    correctOption,
-    explanation: suggestion.explanation?.trim() || 'Sin explicación disponible.',
-    difficulty: suggestion.difficulty === 'facil' || suggestion.difficulty === 'dificil' ? suggestion.difficulty : 'media',
-    authorName: (suggestion.author_name?.trim() || 'Anónimo').slice(0, 80),
-  };
-}
-
 export async function submitQuestionSuggestion(payload: QuestionSuggestionPayload) {
   const safeQuestionText = payload.question_text.trim();
   const safeOptions = payload.options.map((option) => option.trim());
@@ -257,67 +230,23 @@ export async function cleanupSuggestionSourceIfUnused(
 }
 
 export async function approveQuestionSuggestion(suggestion: QuestionSuggestionRecord, adminPassword?: string) {
-  const universityName = suggestion.university_name ?? 'Universidad';
-  const subjectName = suggestion.subject_name ?? 'Materia';
-  const chairName = suggestion.chair_name ?? 'Cátedra';
+  if (!adminPassword) throw new Error('Se requiere autenticación administrativa.');
 
-  const taxonomy = await ensureTaxonomyFromSubmission(
-    {
-      university: universityName,
-      subject: subjectName,
-      chair: chairName,
-    },
-    adminPassword,
-  );
-
-  const normalizedQuestion = normalizeApprovedQuestion(suggestion);
-
-  const { error: insertError } = await supabase.from('questions').insert([
-    {
-      question: normalizedQuestion.questionText,
-      options: normalizedQuestion.options,
-      correct_option: normalizedQuestion.correctOption,
-      explanation: normalizedQuestion.explanation,
-      active: true,
-      is_active: true,
-      subject_id: taxonomy.subjectId,
-      chair_id: taxonomy.chairId,
-      university: universityName,
-      subject: subjectName,
-      chair: chairName,
-      difficulty: normalizedQuestion.difficulty,
-    },
-  ]);
-
-  if (insertError) {
-    throw new Error(insertError.message || 'No se pudo publicar la pregunta propuesta.');
-  }
-
-  const { error: updateError } = await supabase
-    .from('question_suggestions')
-    .update({
-      question_text: normalizedQuestion.questionText,
-      options: normalizedQuestion.options,
-      correct_option: normalizedQuestion.correctOption,
-      explanation: normalizedQuestion.explanation,
-      difficulty: normalizedQuestion.difficulty,
-      author_name: normalizedQuestion.authorName,
-      status: 'approved',
-    })
-    .eq('id', suggestion.id);
-
-  if (updateError) {
-    throw new Error(updateError.message || 'No se pudo marcar la propuesta como aprobada.');
-  }
+  const { error: approvalError } = await supabase.rpc('admin_approve_question_suggestion', {
+    p_suggestion_id: suggestion.id,
+    p_admin_password: adminPassword,
+  });
+  if (approvalError) throw new Error(approvalError.message || 'No se pudo publicar la pregunta propuesta.');
 
   await cleanupSuggestionSourceIfUnused(suggestion, adminPassword ?? '');
 }
 
-export async function rejectQuestionSuggestion(suggestionId: string) {
-  const { error } = await supabase
-    .from('question_suggestions')
-    .update({ status: 'rejected' })
-    .eq('id', suggestionId);
+export async function rejectQuestionSuggestion(suggestionId: string, adminPassword: string) {
+  if (!adminPassword) throw new Error('Se requiere autenticación administrativa.');
+  const { error } = await supabase.rpc('admin_reject_question_suggestion', {
+    p_suggestion_id: suggestionId,
+    p_admin_password: adminPassword,
+  });
 
   if (error) {
     throw new Error(error.message || 'No se pudo rechazar la propuesta.');

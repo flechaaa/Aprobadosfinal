@@ -25,64 +25,15 @@ export async function ensureTaxonomyFromSubmission(
   input: { university: string; subject: string; chair: string },
   adminPassword?: string
 ) {
-  // 1. Buscar o crear Universidad
-  let { data: uniData } = await supabase
-    .from('universities')
-    .select('id')
-    .ilike('name', input.university.trim())
-    .maybeSingle();
-
-  if (!uniData) {
-    const { data: newUni, error: uniError } = await supabase
-      .from('universities')
-      .insert([{ name: input.university.trim() }])
-      .select('id')
-      .single();
-    if (uniError) throw new Error(`No se pudo crear la universidad: ${uniError.message}`);
-    uniData = newUni;
-  }
-
-  // 2. Buscar o crear Materia (Subject)
-  let { data: subData } = await supabase
-    .from('subjects')
-    .select('id')
-    .eq('university_id', uniData.id)
-    .ilike('name', input.subject.trim())
-    .maybeSingle();
-
-  if (!subData) {
-    const { data: newSub, error: subError } = await supabase
-      .from('subjects')
-      .insert([{ university_id: uniData.id, name: input.subject.trim() }])
-      .select('id')
-      .single();
-    if (subError) throw new Error(`No se pudo crear la materia: ${subError.message}`);
-    subData = newSub;
-  }
-
-  // 3. Buscar o crear Cátedra (Chair)
-  let { data: chairData } = await supabase
-    .from('chairs')
-    .select('id')
-    .eq('subject_id', subData.id)
-    .ilike('name', input.chair.trim())
-    .maybeSingle();
-
-  if (!chairData) {
-    const { data: newChair, error: chairError } = await supabase
-      .from('chairs')
-      .insert([{ subject_id: subData.id, name: input.chair.trim() }])
-      .select('id')
-      .single();
-    if (chairError) throw new Error(`No se pudo crear la cátedra: ${chairError.message}`);
-    chairData = newChair;
-  }
-
-  return {
-    universityId: uniData.id,
-    subjectId: subData.id,
-    chairId: chairData.id,
-  };
+  if (!adminPassword) throw new Error('Se requiere autenticación administrativa.');
+  const { data, error } = await supabase.rpc('admin_ensure_taxonomy', {
+    p_university: input.university.trim(),
+    p_subject: input.subject.trim(),
+    p_chair: input.chair.trim(),
+    p_admin_password: adminPassword,
+  });
+  if (error || !data) throw new Error(error?.message || 'No se pudo asegurar la taxonomía administrativa.');
+  return { universityId: data.university_id, subjectId: data.subject_id, chairId: data.chair_id };
 }
 
 export async function insertBatchQuestions(
@@ -90,29 +41,35 @@ export async function insertBatchQuestions(
   submissionId: string,
   chairId: string,
   subjectId: string,
+  adminPassword: string,
   metadata: { university?: string; subject?: string; chair?: string } = {},
-) {
-  if (!questions || questions.length === 0) return;
-
-  const { error } = await supabase.from('questions').insert(questions.map((question) => ({
-    submission_id: submissionId || null,
-    chair_id: chairId || null,
-    subject_id: subjectId || null,
-    university: metadata.university || null,
-    subject: metadata.subject || null,
-    chair: metadata.chair || null,
-    question: question.pregunta,
-    options: question.opciones,
-    correct_option: question.correcta,
-    explanation: question.explicacion || '',
-    difficulty: 'media',
-    active: true,
-    is_active: true,
-  })));
-
-  if (error) {
-    throw new Error(error.message || 'No se pudieron insertar las preguntas en lote.');
+): Promise<{ approved: number; approvedIndexes: number[]; failures: string[] }> {
+  if (!questions || questions.length === 0) return { approved: 0, approvedIndexes: [], failures: [] };
+  let approved = 0;
+  const approvedIndexes: number[] = [];
+  const failures: string[] = [];
+  for (const [index, question] of questions.entries()) {
+    try {
+      await insertQuestion(
+        question.pregunta,
+        question.opciones,
+        question.correcta,
+        question.explicacion,
+        submissionId,
+        adminPassword,
+        chairId,
+        subjectId,
+        metadata,
+      );
+      approved += 1;
+      approvedIndexes.push(index);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`[admin] Falló la aprobación de la pregunta ${index + 1}:`, error);
+      failures.push(`Pregunta ${index + 1}: ${message}`);
+    }
   }
+  return { approved, approvedIndexes, failures };
 }
 
 export async function insertQuestion(
@@ -126,21 +83,20 @@ export async function insertQuestion(
   subjectId: string,
   metadata: { university?: string; subject?: string; chair?: string } = {},
 ) {
-  const { error } = await supabase.from('questions').insert([{
-    submission_id: submissionId || null,
-    chair_id: chairId || null,
-    subject_id: subjectId || null,
-    university: metadata.university || null,
-    subject: metadata.subject || null,
-    chair: metadata.chair || null,
-    question: pregunta,
-    options: opciones,
-    correct_option: correcta,
-    explanation: explicacion || '',
-    difficulty: 'media',
-    active: true,
-    is_active: true,
-  }]);
+  if (!_adminPassword) throw new Error('Se requiere autenticación administrativa.');
+  const { error } = await supabase.rpc('admin_insert_question_v2', {
+    p_pregunta: pregunta,
+    p_opciones: opciones,
+    p_correcta: correcta,
+    p_explicacion: explicacion,
+    p_submission_id: submissionId || null,
+    p_subject_id: subjectId || null,
+    p_chair_id: chairId || null,
+    p_university: metadata.university ?? null,
+    p_subject: metadata.subject ?? null,
+    p_chair: metadata.chair ?? null,
+    p_admin_password: _adminPassword,
+  });
 
   if (error) {
     throw new Error(error.message || 'No se pudo insertar la pregunta.');
@@ -151,7 +107,8 @@ export async function loadPendingSubmissions() {
   const { data, error } = await supabase
     .from('submissions')
     .select('*')
-    .neq('status', 'dismissed')
+    .in('status', ['pending'])
+    .in('processing_status', ['pendiente_procesamiento', 'procesando', 'error', 'error_tokens'])
     .order('created_at', { ascending: false });
 
   if (error) {

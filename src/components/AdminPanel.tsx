@@ -322,7 +322,7 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
     setBusy(true);
     setMessage('');
     try {
-      await rejectQuestionSuggestion(suggestion.id);
+      await rejectQuestionSuggestion(suggestion.id, adminPassword);
       await cleanupSuggestionSourceIfUnused(suggestion, adminPassword);
       setQuestionSuggestions((current) => current.filter((item) => item.id !== suggestion.id));
       setMessage('Propuesta de pregunta rechazada.');
@@ -659,11 +659,12 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
       const pendingQuestions = questions.filter((q) => !q.approved);
 
       // Inserción atómica en bloque de todas las preguntas juntas con subjectId
-      await insertBatchQuestions(
+      const batchResult = await insertBatchQuestions(
         pendingQuestions,
         selected.id,
         taxonomy.chairId,
         taxonomy.subjectId, // <-- CORREGIDO: Pasamos subjectId aquí
+        adminPassword,
         {
           university: selected.university,
           subject: selected.subject,
@@ -671,11 +672,28 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
         }
       );
 
-      await sendApprovedSubmissionPushNotification({
-        subject: selected.subject,
-        chair: selected.chair,
-        sessionId: null,
-      });
+      const approvedQuestions = new Set(batchResult.approvedIndexes.map((index) => pendingQuestions[index]));
+      setQuestions((current) => current.map((question) => (
+        approvedQuestions.has(question) ? { ...question, approved: true } : question
+      )));
+
+      if (batchResult.approved > 0) {
+        try {
+          await sendApprovedSubmissionPushNotification({
+            subject: selected.subject,
+            chair: selected.chair,
+            sessionId: null,
+          });
+        } catch (notificationError) {
+          console.error('[admin] La notificación no pudo enviarse; las preguntas ya fueron aprobadas:', notificationError);
+        }
+      }
+
+      if (batchResult.failures.length > 0) {
+        console.error('[admin] Fallos de aprobación masiva:', batchResult.failures);
+        setMessage(`Se aprobaron ${batchResult.approved} preguntas; ${batchResult.failures.length} fallaron. Revisá la consola y reintentá las fallidas.`);
+        return;
+      }
 
       await markSubmissionProcessed(selected.id, adminPassword);
 
@@ -701,6 +719,9 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
     setBusy(true);
     setMessage('');
     try {
+      if (questions.some((question) => !question.approved)) {
+        throw new Error('Aprobá todas las preguntas antes de marcar el envío como procesado.');
+      }
       await markSubmissionProcessed(selected.id, adminPassword);
       const remaining = submissions.filter((s) => s.id !== selected.id);
       setSubmissions(remaining);
