@@ -84,7 +84,7 @@ export async function insertQuestion(
   metadata: { university?: string; subject?: string; chair?: string } = {},
 ) {
   if (!_adminPassword) throw new Error('Se requiere autenticación administrativa.');
-  const { error } = await supabase.rpc('admin_insert_question_v2', {
+  const { error } = await supabase.rpc('admin_insert_question', {
     p_pregunta: pregunta,
     p_opciones: opciones,
     p_correcta: correcta,
