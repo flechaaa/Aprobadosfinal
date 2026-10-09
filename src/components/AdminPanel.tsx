@@ -118,6 +118,7 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
   const [extractError, setExtractError] = useState('');
   const [progressMsg, setProgressMsg] = useState('');
   const [approvingAll, setApprovingAll] = useState(false);
+  const [approvingAllSuggestions, setApprovingAllSuggestions] = useState(false);
   const [autoProcessingIds, setAutoProcessingIds] = useState<string[]>([]);
 
   // Reports state
@@ -331,6 +332,36 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
     } finally {
       setBusy(false);
     }
+  };
+
+  const handleApproveAllQuestionSuggestions = async () => {
+    if (questionSuggestions.length === 0 || approvingAllSuggestions) return;
+    setApprovingAllSuggestions(true);
+    setMessage('');
+
+    const pending = [...questionSuggestions];
+    let approvedCount = 0;
+    const failures: string[] = [];
+
+    for (const suggestion of pending) {
+      try {
+        await approveQuestionSuggestion(suggestion, adminPassword);
+        approvedCount += 1;
+        setQuestionSuggestions((current) => current.filter((item) => item.id !== suggestion.id));
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Error desconocido';
+        console.error(`[admin] Falló la aprobación masiva de "${suggestion.question_text.slice(0, 50)}...":`, err);
+        failures.push(msg);
+      }
+    }
+
+    if (failures.length > 0) {
+      setMessage(`Se aprobaron ${approvedCount} de ${pending.length} preguntas. ${failures.length} fallaron — revisá la consola.`);
+    } else {
+      setMessage(`¡Se aprobaron las ${approvedCount} preguntas pendientes!`);
+    }
+
+    setApprovingAllSuggestions(false);
   };
 
   const handleDeleteReportedQuestion = async (report: QuestionReport) => {
@@ -935,13 +966,28 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
                 <p className="text-sm font-bold uppercase tracking-widest text-emerald-600">Propuestas</p>
                 <h1 className="mt-1 text-2xl font-extrabold text-gray-900">Preguntas propuestas</h1>
               </div>
-              <button
-                onClick={() => void fetchQuestionSuggestions()}
-                disabled={loadingQuestionSuggestions}
-                className="rounded-xl border border-emerald-200 px-4 py-2 text-xs font-bold text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
-              >
-                {loadingQuestionSuggestions ? 'Cargando...' : 'Recargar'}
-              </button>
+              <div className="flex items-center gap-2">
+                {questionSuggestions.length > 0 && (
+                  <button
+                    onClick={() => void handleApproveAllQuestionSuggestions()}
+                    disabled={approvingAllSuggestions || busy}
+                    className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-md hover:bg-emerald-700 disabled:opacity-50"
+                  >
+                    {approvingAllSuggestions ? (
+                      <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Aprobando...</>
+                    ) : (
+                      <><CheckCheck className="h-3.5 w-3.5" /> Aprobar todas</>
+                    )}
+                  </button>
+                )}
+                <button
+                  onClick={() => void fetchQuestionSuggestions()}
+                  disabled={loadingQuestionSuggestions}
+                  className="rounded-xl border border-emerald-200 px-4 py-2 text-xs font-bold text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+                >
+                  {loadingQuestionSuggestions ? 'Cargando...' : 'Recargar'}
+                </button>
+              </div>
             </div>
 
             {questionSuggestions.length === 0 ? (
