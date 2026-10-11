@@ -9,6 +9,7 @@ export interface SubmissionInput {
   chair: string;
   unit?: string;
   sourceNotes?: string;
+  authorName?: string;
   materialType: MaterialType;
   file: File;
   onProgress?: (percent: number) => void;
@@ -33,6 +34,11 @@ const ALLOWED_MIME_TYPES = [
   'text/plain',
 ];
 const ALLOWED_EXTENSIONS = ['.pdf', '.docx', '.pptx', '.png', '.jpg', '.jpeg', '.txt'];
+
+// Nunca devuelve vacío: si no hay nombre, el autor es "Anónimo".
+export function normalizeAuthorName(value?: string | null): string {
+  return value?.trim().slice(0, 80) || 'Anónimo';
+}
 
 export function validateFile(file: File): string | null {
   if (file.size > MAX_FILE_SIZE) return 'El archivo supera el tamaño máximo permitido de 150 MB.';
@@ -92,6 +98,7 @@ async function uploadSingleSubmission(input: SubmissionInput): Promise<Submissio
     subject: input.subject.trim(),
     chair: input.chair.trim(),
     source_notes: input.sourceNotes?.trim() || null,
+    author_name: normalizeAuthorName(input.authorName),
     material_type: input.materialType,
     file_url: urlData.publicUrl,
     file_type: fileType || `application/${fileExt}`,
@@ -164,6 +171,7 @@ export async function submitTextSubmission(input: Omit<SubmissionInput, 'file'> 
     chair: input.chair.trim(),
     unit: input.unit?.trim() || null,
     source_notes: input.sourceNotes?.trim() || null,
+    author_name: normalizeAuthorName(input.authorName),
     material_type: 'texto',
     file_url: null,
     file_type: 'text/plain',
