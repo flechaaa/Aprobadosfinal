@@ -40,7 +40,7 @@ export function CollaborateModal({ open, onClose }: CollaborateModalProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Estado propio del modo "Proponer una pregunta"
-  const [questionAuthorName, setQuestionAuthorName] = useState('');
+  const [authorName, setAuthorName] = useState('');
   const [questionText, setQuestionText] = useState('');
   const [questionOptions, setQuestionOptions] = useState<string[]>(['', '', '', '']);
   const [questionCorrectOption, setQuestionCorrectOption] = useState(0);
@@ -153,7 +153,7 @@ export function CollaborateModal({ open, onClose }: CollaborateModalProps) {
     setProgress(0);
     setSuccess(false);
     setError('');
-    setQuestionAuthorName('');
+    setAuthorName('');
     setQuestionText('');
     setQuestionOptions(['', '', '', '']);
     setQuestionCorrectOption(0);
@@ -225,6 +225,7 @@ export function CollaborateModal({ open, onClose }: CollaborateModalProps) {
           chair: chair.trim(),
           unit: hasUnit ? unit.trim() || undefined : undefined,
           sourceNotes: sourceNotes.trim() || undefined,
+          authorName: authorName.trim() || undefined,
           materialType,
           text: textContent,
         });
@@ -235,6 +236,7 @@ export function CollaborateModal({ open, onClose }: CollaborateModalProps) {
         chair: chair.trim(),
         unit: hasUnit ? unit.trim() || undefined : undefined,
         sourceNotes: sourceNotes.trim() || undefined,
+        authorName: authorName.trim() || undefined,
         materialType,
           files,
         });
@@ -286,7 +288,7 @@ export function CollaborateModal({ open, onClose }: CollaborateModalProps) {
         question_text: questionText.trim(),
         options: cleanOptions,
         correct_option: questionCorrectOption,
-        author_name: questionAuthorName.trim() || 'Anónimo',
+        author_name: authorName.trim() || 'Anónimo',
         status: 'pending',
       });
 
@@ -408,6 +410,20 @@ export function CollaborateModal({ open, onClose }: CollaborateModalProps) {
                     />
                   </div>
                 )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1.5">
+                  Tu nombre o usuario (opcional)
+                </label>
+                <input
+                  type="text"
+                  value={authorName}
+                  onChange={(event) => setAuthorName(event.target.value)}
+                  placeholder="Si lo dejás vacío, figura como Anónimo"
+                  maxLength={80}
+                  className="w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-sm text-gray-800 outline-none focus:border-teal-500"
+                />
               </div>
 
               {mode === 'material' ? (
@@ -610,17 +626,6 @@ export function CollaborateModal({ open, onClose }: CollaborateModalProps) {
                       Para proponer una pregunta puntual, elegí una universidad, materia y parcial que ya existan en la lista de sugerencias.
                     </p>
                   )}
-
-                  <div>
-                    <label className="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1.5">Tu nombre o alias</label>
-                    <input
-                      type="text"
-                      value={questionAuthorName}
-                      onChange={(event) => setQuestionAuthorName(event.target.value)}
-                      placeholder="Anónimo"
-                      className="w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-sm text-gray-800 outline-none focus:border-teal-500"
-                    />
-                  </div>
 
                   <div>
                     <label className="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1.5">Pregunta</label>
