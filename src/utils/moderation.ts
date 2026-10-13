@@ -8,6 +8,7 @@ export interface Submission {
   subject: string;
   chair: string;
   source_notes: string | null;
+  author_name: string;
   material_type: 'apunte' | 'preguntero_choice' | 'pregunta_respuesta' | 'texto';
   file_url: string | null;
   storage_path: string | null;

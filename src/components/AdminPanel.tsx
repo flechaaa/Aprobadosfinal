@@ -66,6 +66,7 @@ interface QuestionSuggestionRecord {
   correct_option: number;
   explanation?: string | null;
   difficulty?: 'facil' | 'media' | 'dificil' | null;
+  author_name?: string | null;
   status: 'pending' | 'approved' | 'rejected';
   created_at: string;
   university_name?: string;
@@ -1006,6 +1007,7 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
                           <span className="rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-black text-emerald-700">{suggestion.university_name}</span>
                           <span className="rounded-full bg-cyan-50 px-2 py-1 text-[11px] font-black text-cyan-700">{suggestion.subject_name}</span>
                           <span className="rounded-full bg-amber-50 px-2 py-1 text-[11px] font-black text-amber-700">{suggestion.chair_name}</span>
+                          <span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-black text-slate-600">Autor: {suggestion.author_name?.trim() || 'Anónimo'}</span>
                         </div>
                         <div className="flex flex-wrap gap-2">
                           <span className="rounded-full bg-amber-50 px-2 py-1 text-[10px] font-black text-amber-700 border border-amber-200">Se creará la taxonomía si falta</span>
@@ -1219,6 +1221,7 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
                   <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
                     <div><span className="font-semibold text-gray-400">Universidad:</span> <span className="text-gray-700">{selected.university}</span></div>
                     <div><span className="font-semibold text-gray-400">Cátedra:</span> <span className="text-gray-700">{selected.chair}</span></div>
+                    <div><span className="font-semibold text-gray-400">Enviado por:</span> <span className="text-gray-700">{selected.author_name?.trim() || 'Anónimo'}</span></div>
                     {selected.source_notes && <div className="col-span-2"><span className="font-semibold text-gray-400">Notas:</span> <span className="text-gray-700">{selected.source_notes}</span></div>}
                   </div>
                 </div>
