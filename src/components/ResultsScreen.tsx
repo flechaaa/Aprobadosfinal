@@ -3,6 +3,7 @@ import { Trophy, RefreshCw, Check, X, Swords, Home, Medal, GraduationCap, Downlo
 import { toBlob } from 'html-to-image';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
+import { AuthForm } from '@/components/AuthForm';
 import { createChallenge } from '@/utils/game';
 import { saveRankingScore, getRankingIdentity } from '@/utils/rankings';
 import { saveGameHistory, type GameHistoryQuestion } from '@/utils/gameHistory';
@@ -101,10 +102,6 @@ export function ResultsScreen({
   }, []);
 
   const authDisplayName = (freshUser?.user_metadata?.display_name as string | undefined)?.trim() || '';
-  const [registerEmail, setRegisterEmail] = useState('');
-  const [registerMagicLinkSent, setRegisterMagicLinkSent] = useState(false);
-  const [registerError, setRegisterError] = useState('');
-  const [registerSending, setRegisterSending] = useState(false);
   const [profileNameInput, setProfileNameInput] = useState('');
   const [profileNameSaving, setProfileNameSaving] = useState(false);
 
@@ -373,25 +370,6 @@ export function ResultsScreen({
 
   const hasRankingChair = Boolean(selection?.chairId && selection.chairId !== 'all');
   const effectiveRankingName = authDisplayName;
-
-  const handleSendRegisterLink = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!registerEmail.trim() || registerSending) return;
-    setRegisterSending(true);
-    setRegisterError('');
-    try {
-      const { error } = await supabase.auth.signInWithOtp({
-        email: registerEmail.trim(),
-        options: { emailRedirectTo: `${window.location.origin}${window.location.pathname}` },
-      });
-      if (error) throw error;
-      setRegisterMagicLinkSent(true);
-    } catch (err) {
-      setRegisterError(err instanceof Error ? err.message : 'No se pudo enviar el link. Probá de nuevo.');
-    } finally {
-      setRegisterSending(false);
-    }
-  };
 
   const handleSaveProfileName = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -828,7 +806,7 @@ export function ResultsScreen({
                         Respuesta correcta: {correctText}
                       </p>
                     )}
-                    {questionData?.explicacion && (
+                    {!answer.correct && questionData?.explicacion && (
                       <p className="text-xs text-gray-600 mt-1.5 pt-1.5 border-t border-gray-200">
                         {questionData.explicacion}
                       </p>
@@ -861,39 +839,13 @@ export function ResultsScreen({
 
         {namePromptOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 px-4">
-            <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
+            <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl">
               {!session ? (
-                registerMagicLinkSent ? (
-                  <div className="py-4 text-center">
-                    <Check className="mx-auto mb-3 h-10 w-10 text-teal-600" />
-                    <p className="font-bold text-gray-900">¡Listo! Revisá tu email</p>
-                    <p className="mt-1 text-sm text-gray-500">
-                      Te mandamos un link a <span className="font-semibold text-gray-700">{registerEmail}</span>. Abrilo para volver acá y guardar tu puntaje.
-                    </p>
-                  </div>
-                ) : (
-                  <form onSubmit={handleSendRegisterLink}>
-                    <h2 className="text-xl font-extrabold text-gray-900">¡Registrate para participar del ranking y compartir con tus amigos!</h2>
-                    <p className="mt-2 text-sm text-gray-600">Es gratis, sin necesidad de contraseña — solo tu email.</p>
-                    <input
-                      type="email"
-                      required
-                      autoFocus
-                      value={registerEmail}
-                      onChange={(event) => setRegisterEmail(event.target.value)}
-                      placeholder="tu@email.com"
-                      className="mt-4 w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-sm text-gray-800 outline-none focus:border-teal-500"
-                    />
-                    {registerError && <p className="mt-2 text-xs font-semibold text-red-600">{registerError}</p>}
-                    <button
-                      type="submit"
-                      disabled={registerSending || !registerEmail.trim()}
-                      className="mt-4 w-full rounded-xl bg-teal-600 px-4 py-3 font-bold text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {registerSending ? 'Enviando...' : 'Enviarme el link para entrar'}
-                    </button>
-                  </form>
-                )
+                <AuthForm
+                  heading="¡Registrate para participar del ranking y compartir con tus amigos!"
+                  subheading="Es gratis: solo necesitás un email y una contraseña. Tu nombre queda guardado en tu cuenta."
+                  defaultMode="signup"
+                />
               ) : (
                 <form onSubmit={handleSaveProfileName}>
                   <h2 className="text-xl font-extrabold text-gray-900">¿Cómo te llamás?</h2>

@@ -4,6 +4,7 @@ import { GameScreen } from '@/components/GameScreen';
 import { ResultsScreen } from '@/components/ResultsScreen';
 import { AdminPanel } from '@/components/AdminPanel';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { PasswordRecoveryModal } from '@/components/PasswordRecoveryModal';
 import { supabase } from '@/lib/supabase';
 import { loadTaxonomy } from '@/utils/taxonomy';
 import { selectRandomQuestions, loadChallenge, loadQuestionsForGame, loadRandomQuestionsForGame } from '@/utils/game';
@@ -189,6 +190,7 @@ function App() {
 
   return (
     <ErrorBoundary>
+      <PasswordRecoveryModal />
       {screen === 'start' && (
         <StartScreen
           onStart={handleStart}

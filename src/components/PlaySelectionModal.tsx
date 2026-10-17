@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowRight, Play, X, CheckCircle2 } from 'lucide-react';
+import { ArrowRight, Play, X } from 'lucide-react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
+import { AuthForm } from '@/components/AuthForm';
 import { AutocompleteField } from '@/components/AutocompleteField';
 import type { TaxonomySelection } from '@/components/TaxonomyPicker';
 import type { Chair, Subject, University } from '@/types';
@@ -45,10 +46,6 @@ export function PlaySelectionModal({
 
   const [session, setSession] = useState<Session | null>(null);
   const [freshUser, setFreshUser] = useState<Session['user'] | null>(null);
-  const [email, setEmail] = useState('');
-  const [magicLinkSent, setMagicLinkSent] = useState(false);
-  const [authError, setAuthError] = useState('');
-  const [sendingLink, setSendingLink] = useState(false);
 
   useEffect(() => {
     const syncUser = async () => {
@@ -74,72 +71,6 @@ export function PlaySelectionModal({
   const hasPlayedFreeGame =
     typeof window !== 'undefined' && localStorage.getItem('aprobados_has_played_free_game') === 'true';
   const requiresSignIn = hasPlayedFreeGame && !session;
-
-  const handleSendMagicLink = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!email.trim() || sendingLink) return;
-    setSendingLink(true);
-    setAuthError('');
-    try {
-      const { error } = await supabase.auth.signInWithOtp({
-        email: email.trim(),
-        options: { emailRedirectTo: `${window.location.origin}${window.location.pathname}` },
-      });
-      if (error) throw error;
-      setMagicLinkSent(true);
-    } catch (err) {
-      setAuthError(err instanceof Error ? err.message : 'No se pudo enviar el link. Probá de nuevo.');
-    } finally {
-      setSendingLink(false);
-    }
-  };
-
-  const universityId = useMemo(
-    () => universities.find((u) => normalizeValue(u.name) === normalizeValue(universityName))?.id ?? '',
-    [universities, universityName],
-  );
-
-  const exactSubjectId = useMemo(
-    () => subjects.find((s) => normalizeValue(s.name) === normalizeValue(subjectName) && s.university_id === universityId)?.id ?? '',
-    [subjects, subjectName, universityId],
-  );
-
-  const subjectId = useMemo(
-    () => universityId && !subjectName.trim() ? 'all' : exactSubjectId,
-    [universityId, subjectName, exactSubjectId],
-  );
-
-  const exactChairId = useMemo(
-    () => chairs.find((c) => normalizeValue(c.name) === normalizeValue(chairName) && c.subject_id === subjectId)?.id ?? '',
-    [chairs, chairName, subjectId],
-  );
-
-  const chairId = useMemo(
-    () => subjectId === 'all' || (subjectId && !chairName.trim()) ? 'all' : exactChairId,
-    [subjectId, chairName, exactChairId],
-  );
-
-  const availableSubjects = useMemo(
-    () => subjects.filter((subject) => subject.university_id === universityId),
-    [subjects, universityId],
-  );
-
-  const availableChairs = useMemo(
-    () => subjectId && subjectId !== 'all' ? chairs.filter((chair) => chair.subject_id === subjectId) : [],
-    [chairs, subjectId],
-  );
-
-  useEffect(() => {
-    if (!open) return;
-
-    setName(initialName);
-    setUniversityName(initialSelection ? universities.find((u) => u.id === initialSelection.universityId)?.name ?? '' : '');
-    setSubjectName(initialSelection ? subjects.find((s) => s.id === initialSelection.subjectId)?.name ?? '' : '');
-    const previousPartialId = initialSelection?.partialId || initialSelection?.chairId || '';
-    setChairName(initialSelection ? chairs.find((c) => c.id === previousPartialId)?.name ?? '' : '');
-    setUseUnit(Boolean(initialSelection?.unitId && initialSelection.unitId.trim()));
-    setUnitName(initialSelection?.unitId ?? '');
-  }, [open, initialName, initialSelection, universities, subjects, chairs]);
 
   if (!open) return null;
 
@@ -176,40 +107,10 @@ export function PlaySelectionModal({
 
         <div className="max-h-[calc(92vh-80px)] overflow-y-auto px-6 py-5 pb-20 space-y-4">
           {requiresSignIn ? (
-            magicLinkSent ? (
-              <div className="py-6 text-center">
-                <CheckCircle2 className="mx-auto mb-3 h-10 w-10 text-teal-600" />
-                <p className="font-bold text-gray-800">¡Listo! Revisá tu email</p>
-                <p className="mt-1 text-sm text-gray-500">
-                  Te mandamos un link a <span className="font-semibold text-gray-700">{email}</span>. Abrilo desde este mismo dispositivo para entrar y seguir jugando.
-                </p>
-              </div>
-            ) : (
-              <form onSubmit={handleSendMagicLink} className="space-y-3">
-                <div className="mb-1 text-center">
-                  <p className="font-bold text-gray-800">¡Registrate para participar del ranking y compartir con tus amigos!</p>
-                  <p className="mt-1 text-sm text-gray-500">
-                    Es gratis, sin necesidad de contraseña — solo tu email.
-                  </p>
-                </div>
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  placeholder="tu@email.com"
-                  className="w-full rounded-xl border-2 border-gray-200 bg-white px-4 py-3 text-sm text-gray-800 outline-none transition-colors focus:border-teal-500"
-                />
-                {authError && <p className="text-xs font-semibold text-red-600">{authError}</p>}
-                <button
-                  type="submit"
-                  disabled={sendingLink || !email.trim()}
-                  className="w-full bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white font-black py-4 rounded-2xl transition-all shadow-lg disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {sendingLink ? 'Enviando...' : 'Enviarme el link para entrar'}
-                </button>
-              </form>
-            )
+            <AuthForm
+              heading="¡Registrate para participar del ranking y compartir con tus amigos!"
+              subheading="Es gratis: solo necesitás un email y una contraseña."
+            />
           ) : (
             <>
           <div>

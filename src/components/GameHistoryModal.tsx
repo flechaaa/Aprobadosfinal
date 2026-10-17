@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { X, ChevronRight, ArrowLeft, Trophy, CheckCircle2, XCircle } from 'lucide-react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
+import { AuthForm } from '@/components/AuthForm';
 import { loadGameHistory, type GameHistoryEntry } from '@/utils/gameHistory';
 
 interface GameHistoryModalProps {
@@ -15,10 +16,6 @@ export function GameHistoryModal({ open, onClose }: GameHistoryModalProps) {
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<GameHistoryEntry | null>(null);
 
-  const [email, setEmail] = useState('');
-  const [magicLinkSent, setMagicLinkSent] = useState(false);
-  const [authError, setAuthError] = useState('');
-  const [sending, setSending] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
@@ -37,30 +34,8 @@ export function GameHistoryModal({ open, onClose }: GameHistoryModalProps) {
   useEffect(() => {
     if (!open) {
       setSelected(null);
-      setEmail('');
-      setMagicLinkSent(false);
-      setAuthError('');
     }
   }, [open]);
-
-  const handleSendMagicLink = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!email.trim() || sending) return;
-    setSending(true);
-    setAuthError('');
-    try {
-      const { error } = await supabase.auth.signInWithOtp({
-        email: email.trim(),
-        options: { emailRedirectTo: `${window.location.origin}${window.location.pathname}` },
-      });
-      if (error) throw error;
-      setMagicLinkSent(true);
-    } catch (err) {
-      setAuthError(err instanceof Error ? err.message : 'No se pudo enviar el link. Probá de nuevo.');
-    } finally {
-      setSending(false);
-    }
-  };
 
   if (!open) return null;
 
@@ -83,37 +58,10 @@ export function GameHistoryModal({ open, onClose }: GameHistoryModalProps) {
 
         <div className="max-h-[calc(85vh-64px)] overflow-y-auto p-6">
           {!session ? (
-            magicLinkSent ? (
-              <div className="py-6 text-center">
-                <CheckCircle2 className="mx-auto mb-3 h-10 w-10 text-teal-600" />
-                <p className="font-bold text-gray-800">¡Listo! Revisá tu email</p>
-                <p className="mt-1 text-sm text-gray-500">
-                  Te mandamos un link a <span className="font-semibold text-gray-700">{email}</span>. Abrilo para ver tu historial.
-                </p>
-              </div>
-            ) : (
-              <form onSubmit={handleSendMagicLink}>
-                <p className="font-bold text-gray-800">Registrate para ver tu historial de partidas</p>
-                <p className="mt-1 text-sm text-gray-500">Es gratis, sin necesidad de contraseña — solo tu email.</p>
-                <input
-                  type="email"
-                  required
-                  autoFocus
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  placeholder="tu@email.com"
-                  className="mt-4 w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-sm text-gray-800 outline-none focus:border-teal-500"
-                />
-                {authError && <p className="mt-2 text-xs font-semibold text-red-600">{authError}</p>}
-                <button
-                  type="submit"
-                  disabled={sending || !email.trim()}
-                  className="mt-4 w-full rounded-xl bg-teal-600 px-4 py-3 font-bold text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {sending ? 'Enviando...' : 'Enviarme el link para entrar'}
-                </button>
-              </form>
-            )
+            <AuthForm
+              heading="Registrate para ver tu historial de partidas"
+              subheading="Es gratis: solo necesitás un email y una contraseña."
+            />
           ) : selected ? (
             <div className="space-y-3">
               <div className="rounded-2xl bg-gradient-to-br from-teal-600 to-emerald-600 p-4 text-white">
