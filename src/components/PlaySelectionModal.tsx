@@ -72,6 +72,53 @@ export function PlaySelectionModal({
     typeof window !== 'undefined' && localStorage.getItem('aprobados_has_played_free_game') === 'true';
   const requiresSignIn = hasPlayedFreeGame && !session;
 
+  const universityId = useMemo(
+    () => universities.find((u) => normalizeValue(u.name) === normalizeValue(universityName))?.id ?? '',
+    [universities, universityName],
+  );
+
+  const exactSubjectId = useMemo(
+    () => subjects.find((s) => normalizeValue(s.name) === normalizeValue(subjectName) && s.university_id === universityId)?.id ?? '',
+    [subjects, subjectName, universityId],
+  );
+
+  const subjectId = useMemo(
+    () => universityId && !subjectName.trim() ? 'all' : exactSubjectId,
+    [universityId, subjectName, exactSubjectId],
+  );
+
+  const exactChairId = useMemo(
+    () => chairs.find((c) => normalizeValue(c.name) === normalizeValue(chairName) && c.subject_id === subjectId)?.id ?? '',
+    [chairs, chairName, subjectId],
+  );
+
+  const chairId = useMemo(
+    () => subjectId === 'all' || (subjectId && !chairName.trim()) ? 'all' : exactChairId,
+    [subjectId, chairName, exactChairId],
+  );
+
+  const availableSubjects = useMemo(
+    () => subjects.filter((subject) => subject.university_id === universityId),
+    [subjects, universityId],
+  );
+
+  const availableChairs = useMemo(
+    () => subjectId && subjectId !== 'all' ? chairs.filter((chair) => chair.subject_id === subjectId) : [],
+    [chairs, subjectId],
+  );
+
+  useEffect(() => {
+    if (!open) return;
+
+    setName(initialName);
+    setUniversityName(initialSelection ? universities.find((u) => u.id === initialSelection.universityId)?.name ?? '' : '');
+    setSubjectName(initialSelection ? subjects.find((s) => s.id === initialSelection.subjectId)?.name ?? '' : '');
+    const previousPartialId = initialSelection?.partialId || initialSelection?.chairId || '';
+    setChairName(initialSelection ? chairs.find((c) => c.id === previousPartialId)?.name ?? '' : '');
+    setUseUnit(Boolean(initialSelection?.unitId && initialSelection.unitId.trim()));
+    setUnitName(initialSelection?.unitId ?? '');
+  }, [open, initialName, initialSelection, universities, subjects, chairs]);
+
   if (!open) return null;
 
   const isReady = Boolean(universityId && subjectId && chairId);
@@ -79,7 +126,7 @@ export function PlaySelectionModal({
 
   const handleStart = () => {
     if (!isReady) return;
-    onStart(name.trim() || 'AnÃ³nimo', {
+    onStart(name.trim() || 'Anónimo', {
       universityId,
       subjectId,
       partialId: chairId,
@@ -174,7 +221,7 @@ export function PlaySelectionModal({
                 }}
                 className="h-4 w-4 accent-teal-600"
               />
-              Agregar unidad (opcional)
+              Unidad
             </label>
             {useUnit && (
               <div className="mt-3">
@@ -183,7 +230,7 @@ export function PlaySelectionModal({
                   value={unitName}
                   onChange={setUnitName}
                   suggestions={[]}
-                  placeholder="Ej: Unidad 1, MicrobiologÃ­a"
+                  placeholder="Ej: Unidad 1, Microbiología"
                   maxLength={200}
                 />
               </div>

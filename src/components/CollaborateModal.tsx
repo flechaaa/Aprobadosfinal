@@ -396,7 +396,7 @@ export function CollaborateModal({ open, onClose }: CollaborateModalProps) {
                     }}
                     className="h-4 w-4 accent-teal-600"
                   />
-                  Agregar unidad (opcional)
+                  Unidad
                 </label>
                 {hasUnit && (
                   <div className="mt-3">
