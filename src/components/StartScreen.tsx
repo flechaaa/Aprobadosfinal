@@ -23,12 +23,18 @@ interface StartScreenProps {
   questionsLoadError?: string;
 }
 
+const SIMULACROS_ACCESS_KEY = 'aprobados_simulacros_access';
+const SIMULACROS_PASSWORD = 'Profesorx2026';
+
 export function StartScreen({ onStart, onQuickGame, challengeData, universities, subjects, chairs, taxonomyError, totalQuestions, onOpenAdmin, questionsLoadError }: StartScreenProps) {
   const [name, setName] = useState('');
   const [playOpen, setPlayOpen] = useState(false);
   const [collaborateOpen, setCollaborateOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [rankingOpen, setRankingOpen] = useState(false);
+  const [simulacrosPasswordOpen, setSimulacrosPasswordOpen] = useState(false);
+  const [simulacrosPassword, setSimulacrosPassword] = useState('');
+  const [simulacrosPasswordError, setSimulacrosPasswordError] = useState('');
 
   const [freshUser, setFreshUser] = useState<Session['user'] | null>(null);
   const [userStats, setUserStats] = useState<UserStats | null>(null);
@@ -62,6 +68,26 @@ export function StartScreen({ onStart, onQuickGame, challengeData, universities,
   const handleStartWithSelection = (playerName: string, selection: TaxonomySelection) => {
     setPlayOpen(false);
     onStart(playerName, selection);
+  };
+
+  const handleOpenSimulacros = () => {
+    if (sessionStorage.getItem(SIMULACROS_ACCESS_KEY) === 'true') {
+      window.location.href = '/Herramienta.html';
+      return;
+    }
+    setSimulacrosPassword('');
+    setSimulacrosPasswordError('');
+    setSimulacrosPasswordOpen(true);
+  };
+
+  const handleSimulacrosPasswordSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (simulacrosPassword !== SIMULACROS_PASSWORD) {
+      setSimulacrosPasswordError('Contraseña incorrecta.');
+      return;
+    }
+    sessionStorage.setItem(SIMULACROS_ACCESS_KEY, 'true');
+    window.location.href = '/Herramienta.html';
   };
 
   return (
@@ -142,13 +168,14 @@ export function StartScreen({ onStart, onQuickGame, challengeData, universities,
               Partida rápida
             </button>
 
-            <a
-              href="/Herramienta.html"
+            <button
+              type="button"
+              onClick={handleOpenSimulacros}
               className="w-full rounded-xl border-2 border-amber-200 bg-amber-50 py-3 text-sm font-bold text-amber-700 transition hover:bg-amber-100 active:scale-[0.98] flex items-center justify-center gap-2"
             >
               <ClipboardCheck className="h-4 w-4" />
               Simulacros
-            </a>
+            </button>
 
             <button
               type="button"
@@ -220,6 +247,41 @@ export function StartScreen({ onStart, onQuickGame, challengeData, universities,
         open={collaborateOpen}
         onClose={() => setCollaborateOpen(false)}
       />
+
+      {simulacrosPasswordOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/60 px-4">
+          <form onSubmit={handleSimulacrosPasswordSubmit} className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl">
+            <h2 className="text-xl font-extrabold text-gray-900">Acceso a simulacros</h2>
+            <p className="mt-1 text-sm text-gray-500">Ingresá la contraseña para continuar.</p>
+            <input
+              type="password"
+              required
+              autoFocus
+              value={simulacrosPassword}
+              onChange={(event) => {
+                setSimulacrosPassword(event.target.value);
+                setSimulacrosPasswordError('');
+              }}
+              placeholder="Contraseña"
+              autoComplete="current-password"
+              className="mt-4 w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-sm text-gray-800 outline-none transition-colors focus:border-amber-500"
+            />
+            {simulacrosPasswordError && <p className="mt-2 text-xs font-semibold text-red-600">{simulacrosPasswordError}</p>}
+            <div className="mt-4 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setSimulacrosPasswordOpen(false)}
+                className="flex-1 rounded-xl border-2 border-gray-200 py-3 text-sm font-bold text-gray-600 hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+              <button type="submit" className="flex-1 rounded-xl bg-amber-500 py-3 text-sm font-bold text-white hover:bg-amber-600">
+                Entrar
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }
