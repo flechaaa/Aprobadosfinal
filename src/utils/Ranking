@@ -1,0 +1,10 @@
+import { supabase } from '@/lib/supabase';
+
+async function saveScore(chairId: string, playerName: string, score: number) {
+  const { error } = await supabase.from('rankings').insert({
+    chair_id: chairId,
+    player_name: playerName,
+    score: score,
+  });
+  if (error) console.error('Error guardando ranking:', error);
+}

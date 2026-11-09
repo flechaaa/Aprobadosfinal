@@ -1,0 +1,1696 @@
+[
+  {
+    "pregunta": "Ante una víctima de violación (agresión sexual), ¿qué medida se debe priorizar además de la atención de lesiones?",
+    "opciones": [
+      "Realizar únicamente el examen forense sin informar derechos legales",
+      "Garantizar privacidad e informar el derecho a denunciar, junto con profilaxis de ITS y anticoncepción de emergencia",
+      "Derivar directamente a la policía antes de cualquier atención médica",
+      "Esperar la autorización judicial para iniciar cualquier tratamiento"
+    ],
+    "correcta": 1,
+    "explicacion": "Se debe garantizar privacidad, informar el derecho a denunciar y ofrecer profilaxis de ITS, anticoncepción de emergencia y apoyo psicológico."
+  },
+  {
+    "pregunta": "¿Qué sistemas evalúa el score SOFA utilizado en Terapia Intensiva?",
+    "opciones": [
+      "Solo la función respiratoria y renal",
+      "Respiratorio, cardiovascular, hepático, coagulación, renal y neurológico",
+      "Únicamente parámetros hemodinámicos",
+      "Solo el estado de conciencia y la temperatura"
+    ],
+    "correcta": 1,
+    "explicacion": "El SOFA monitoriza dinámicamente 6 sistemas: respiratorio, cardiovascular, hepático, coagulación, renal y neurológico."
+  },
+  {
+    "pregunta": "¿Cuál es la causa más frecuente de retinitis en pacientes con SIDA avanzado?",
+    "opciones": [
+      "Toxoplasma gondii",
+      "Citomegalovirus (CMV)",
+      "Herpes simple tipo 1",
+      "Cryptococcus neoformans"
+    ],
+    "correcta": 1,
+    "explicacion": "El CMV es la causa más frecuente de retinitis en pacientes con CD4+ <100 cél/µL, pudiendo llevar a ceguera si no se trata."
+  },
+  {
+    "pregunta": "¿Qué enfermedad viral marcadora de SIDA está causada por el VHH-8?",
+    "opciones": [
+      "Leucoplasia oral vellosa",
+      "Sarcoma de Kaposi",
+      "Linfoma primario de SNC",
+      "Retinitis"
+    ],
+    "correcta": 1,
+    "explicacion": "El herpesvirus humano tipo 8 (VHH-8) es el agente causal del sarcoma de Kaposi, marcador clásico de SIDA."
+  },
+  {
+    "pregunta": "¿Qué es el síndrome inflamatorio de reconstitución inmune (SIRI)?",
+    "opciones": [
+      "El fracaso virológico de la TARGA por resistencia",
+      "El deterioro clínico paradojal frente a infecciones preexistentes al recuperarse la inmunidad tras iniciar TARGA",
+      "La toxicidad hepática directa de los antirretrovirales",
+      "La resistencia cruzada entre inhibidores de proteasa"
+    ],
+    "correcta": 1,
+    "explicacion": "Al iniciar TARGA, la recuperación inmune puede generar una respuesta inflamatoria paradojal frente a patógenos preexistentes (TBC, MAC, CMV, Cryptococcus)."
+  },
+  {
+    "pregunta": "¿Cuál es el tratamiento antifúngico de elección para la histoplasmosis en pacientes con SIDA?",
+    "opciones": [
+      "Fluconazol en dosis única",
+      "Anfotericina B o itraconazol por al menos 8 semanas",
+      "Nistatina tópica",
+      "Terbinafina oral"
+    ],
+    "correcta": 1,
+    "explicacion": "La histoplasmosis diseminada requiere antifúngicos sistémicos (anfotericina B o itraconazol) durante al menos 8 semanas."
+  },
+  {
+    "pregunta": "¿Cuál de los siguientes parásitos es marcador de inmunosupresión avanzada en VIH por causar diarrea crónica persistente?",
+    "opciones": [
+      "Giardia lamblia",
+      "Cryptosporidium parvum",
+      "Áscaris lumbricoides",
+      "Enterobius vermicularis"
+    ],
+    "correcta": 1,
+    "explicacion": "Cryptosporidium parvum es un marcador de inmunosupresión avanzada, causando diarrea profusa y persistente por afectación de las criptas intestinales."
+  },
+  {
+    "pregunta": "¿Cuál de estos parásitos NO se considera un marcador clásico de inmunosupresión avanzada en VIH?",
+    "opciones": [
+      "Isospora belli",
+      "Microsporidium spp.",
+      "Strongyloides stercoralis",
+      "Áscaris lumbricoides"
+    ],
+    "correcta": 3,
+    "explicacion": "Isospora belli, Microsporidium y Strongyloides son marcadores de inmunosupresión avanzada; Áscaris no tiene ese valor marcador en VIH."
+  },
+  {
+    "pregunta": "¿Con qué fármaco se trata la microsporidiosis intestinal en pacientes con VIH?",
+    "opciones": [
+      "Metronidazol",
+      "Albendazol",
+      "Trimetoprima-sulfametoxazol",
+      "Fluconazol"
+    ],
+    "correcta": 1,
+    "explicacion": "La microsporidiosis se trata con albendazol, mientras que la isosporosis se trata con TMP-SMX."
+  },
+  {
+    "pregunta": "¿Cuál es la forma clínica más frecuente de candidiasis oral en pacientes con VIH?",
+    "opciones": [
+      "Hiperplásica",
+      "Pseudomembranosa (exudado blanquecino desprendible)",
+      "Atrófica",
+      "Queilitis angular exclusiva"
+    ],
+    "correcta": 1,
+    "explicacion": "La forma pseudomembranosa, con placas blanquecinas desprendibles, es la presentación clásica y más frecuente del muguet oral."
+  },
+  {
+    "pregunta": "¿Cuál es la causa más frecuente de esofagitis en pacientes con VIH?",
+    "opciones": [
+      "Citomegalovirus",
+      "Candidiasis esofágica",
+      "Herpes simple",
+      "Mycobacterium avium"
+    ],
+    "correcta": 1,
+    "explicacion": "La candidiasis esofágica (Candida albicans) es la causa más frecuente, con exudado tipo 'queso cottage' en la endoscopía."
+  },
+  {
+    "pregunta": "¿Qué virus es el agente causal de la leucoencefalopatía multifocal progresiva (LEMP)?",
+    "opciones": [
+      "Virus JC",
+      "Citomegalovirus",
+      "Virus de Epstein-Barr",
+      "VHH-8"
+    ],
+    "correcta": 0,
+    "explicacion": "La LEMP es causada por el virus JC (familia Papovavirus), con lesiones desmielinizantes en sustancia blanca."
+  },
+  {
+    "pregunta": "¿Cuál es la causa más frecuente de lesión focal cerebral en pacientes con SIDA?",
+    "opciones": [
+      "Linfoma primario de SNC",
+      "Toxoplasmosis cerebral",
+      "Criptococosis del SNC",
+      "Chagas cerebral"
+    ],
+    "correcta": 1,
+    "explicacion": "La toxoplasmosis cerebral por Toxoplasma gondii es la causa más frecuente de lesión focal cerebral en pacientes con CD4+ <100 cél/µL."
+  },
+  {
+    "pregunta": "¿Cuál es el tratamiento de elección para la toxoplasmosis cerebral en SIDA?",
+    "opciones": [
+      "Fluconazol en altas dosis",
+      "Sulfadiazina + pirimetamina + ácido folínico",
+      "Anfotericina B sola",
+      "Ganciclovir"
+    ],
+    "correcta": 1,
+    "explicacion": "El esquema de elección es sulfadiazina + pirimetamina + ácido folínico; la alternativa es TMP-SMX o clindamicina + pirimetamina."
+  },
+  {
+    "pregunta": "¿Con qué antivirales se trata la retinitis por CMV en pacientes con SIDA?",
+    "opciones": [
+      "Aciclovir o valaciclovir",
+      "Ganciclovir o foscarnet",
+      "Ribavirina",
+      "Oseltamivir"
+    ],
+    "correcta": 1,
+    "explicacion": "La retinitis por CMV se trata con ganciclovir o foscarnet, según el caso clínico."
+  },
+  {
+    "pregunta": "¿Qué manifestación cardíaca del SIDA se asocia particularmente al uso de inhibidores de proteasa?",
+    "opciones": [
+      "Miocardiopatía dilatada",
+      "Vasculopatía/enfermedad coronaria",
+      "Derrame pericárdico",
+      "Endocarditis"
+    ],
+    "correcta": 1,
+    "explicacion": "Los inhibidores de proteasa se asocian a dislipemia y aumento del riesgo de enfermedad coronaria en pacientes VIH+."
+  },
+  {
+    "pregunta": "En la Rx de tórax de un paciente con VIH, ¿qué agente se asocia clásicamente a un patrón intersticial difuso en 'alas de mariposa'?",
+    "opciones": [
+      "Mycobacterium tuberculosis",
+      "Pneumocystis jirovecii",
+      "Cryptococcus neoformans",
+      "Aspergillus fumigatus"
+    ],
+    "correcta": 1,
+    "explicacion": "Pneumocystis jirovecii produce típicamente un infiltrado intersticial difuso bilateral en 'alas de mariposa', que puede evolucionar a SDRA."
+  },
+  {
+    "pregunta": "¿Qué agente causa masas pulmonares cavitadas de aspecto nodular en un paciente con VIH, distinto de la tuberculosis?",
+    "opciones": [
+      "Rhodococcus equi",
+      "Streptococcus pneumoniae",
+      "Haemophilus influenzae",
+      "Legionella pneumophila"
+    ],
+    "correcta": 0,
+    "explicacion": "Rhodococcus equi produce masas cavitadas de aspecto nodular en pacientes inmunocomprometidos con VIH."
+  },
+  {
+    "pregunta": "¿Qué manifestación oral en VIH se asocia a periodontitis ulceronecrosante con eritema marginal lineal?",
+    "opciones": [
+      "Sarcoma de Kaposi oral",
+      "Gingivitis/periodontitis ulceronecrosante bacteriana",
+      "Leucoplasia oral vellosa",
+      "Candidiasis pseudomembranosa"
+    ],
+    "correcta": 1,
+    "explicacion": "La gingivitis/periodontitis ulceronecrosante bacteriana se trata con desbridamiento y metronidazol."
+  },
+  {
+    "pregunta": "En la coinfección Chagas-VIH, ¿con qué nivel de CD4+ es típica la reactivación con compromiso del SNC?",
+    "opciones": [
+      "CD4+ <500 cél/µL",
+      "CD4+ <350 cél/µL",
+      "CD4+ <50 cél/µL",
+      "CD4+ >500 cél/µL"
+    ],
+    "correcta": 2,
+    "explicacion": "La reactivación de Chagas con abscesos cerebrales o meningoencefalitis es típica de inmunosupresión severa (CD4+ <50 cél/µL)."
+  },
+  {
+    "pregunta": "¿Cómo es el LCR característico de la meningoencefalitis aséptica en pacientes con VIH?",
+    "opciones": [
+      "Turbio con predominio de PMN y glucosa muy baja",
+      "Claro con pleocitosis, proteínas elevadas, glucosa normal y cloro bajo",
+      "Hemorrágico con predominio eosinofílico",
+      "Normal en todos los parámetros"
+    ],
+    "correcta": 1,
+    "explicacion": "La meningoencefalitis aséptica cursa con LCR claro, pleocitosis, proteínas elevadas, glucosa normal y cloro bajo, de curso autolimitado."
+  },
+  {
+    "pregunta": "¿Cuál es el fármaco de elección para la quimioprofilaxis en contactos estrechos de un caso de TBC?",
+    "opciones": [
+      "Rifampicina",
+      "Isoniacida",
+      "Etambutol",
+      "Pirazinamida"
+    ],
+    "correcta": 1,
+    "explicacion": "La isoniacida 5 mg/kg/día (máx. 300 mg) por al menos 6 meses es el fármaco de elección para la quimioprofilaxis de contactos."
+  },
+  {
+    "pregunta": "En el esquema de primera línea para TBC (HRZE), ¿qué fármaco se asocia característicamente a neuritis óptica?",
+    "opciones": [
+      "Isoniacida",
+      "Rifampicina",
+      "Etambutol",
+      "Pirazinamida"
+    ],
+    "correcta": 2,
+    "explicacion": "El etambutol es el fármaco antituberculoso clásicamente asociado a neuritis óptica, por lo que requiere control oftalmológico."
+  },
+  {
+    "pregunta": "¿Cuál es la duración estándar de la fase de consolidación (HR) en el tratamiento de la TBC pulmonar no complicada?",
+    "opciones": [
+      "1 mes",
+      "4 a 6 meses",
+      "12 meses",
+      "2 semanas"
+    ],
+    "correcta": 1,
+    "explicacion": "El esquema estándar es 2 meses de HRZE (ataque) seguidos de 4-6 meses de HR (consolidación)."
+  },
+  {
+    "pregunta": "¿Qué método diagnóstico se usa para la tuberculosis latente?",
+    "opciones": [
+      "Baciloscopia de esputo",
+      "PPD/Mantoux",
+      "Cultivo BACTEC",
+      "PCR de esputo"
+    ],
+    "correcta": 1,
+    "explicacion": "La PPD (Mantoux) es el método clásico para detectar infección tuberculosa latente, sin enfermedad activa."
+  },
+  {
+    "pregunta": "¿Cuál es el reservorio animal no humano de Mycobacterium leprae?",
+    "opciones": [
+      "El murciélago",
+      "El armadillo de 9 bandas",
+      "La rata",
+      "El perro"
+    ],
+    "correcta": 1,
+    "explicacion": "El armadillo de 9 bandas es el reservorio animal conocido de M. leprae, además del humano."
+  },
+  {
+    "pregunta": "¿Qué forma de lepra se caracteriza por baciloscopia positiva y leprominorreacción negativa?",
+    "opciones": [
+      "Lepra tuberculoide",
+      "Lepra lepromatosa (multibacilar)",
+      "Lepra indeterminada",
+      "Lepra dimorfa"
+    ],
+    "correcta": 1,
+    "explicacion": "La lepra lepromatosa es multibacilar (baciloscopia positiva) con leprominorreacción negativa, a diferencia de la tuberculoide (paucibacilar)."
+  },
+  {
+    "pregunta": "¿A qué subunidad ribosomal se unen las tetraciclinas como la doxiciclina para inhibir la síntesis proteica bacteriana?",
+    "opciones": [
+      "50S",
+      "30S",
+      "40S",
+      "60S"
+    ],
+    "correcta": 1,
+    "explicacion": "Las tetraciclinas inhiben la síntesis proteica bacteriana uniéndose a la subunidad ribosomal 30S."
+  },
+  {
+    "pregunta": "¿Cuál es el principal efecto adverso hematológico del linezolid con el uso prolongado?",
+    "opciones": [
+      "Anemia hemolítica",
+      "Mielosupresión (anemia, trombocitopenia)",
+      "Agranulocitosis inmediata",
+      "Policitemia"
+    ],
+    "correcta": 1,
+    "explicacion": "El linezolid puede producir mielosupresión (anemia y trombocitopenia) con el uso prolongado, además de neuropatía y prolongación del QT."
+  },
+  {
+    "pregunta": "¿Cuál es la principal ventaja del aztreonam frente a los aminoglucósidos en infecciones por gramnegativos?",
+    "opciones": [
+      "Cubre también anaerobios",
+      "No es nefrotóxico ni ototóxico",
+      "Tiene actividad frente a grampositivos",
+      "Se administra por vía oral"
+    ],
+    "correcta": 1,
+    "explicacion": "El aztreonam es una alternativa bactericida a los aminoglucósidos para gramnegativos, sin su nefro/ototoxicidad."
+  },
+  {
+    "pregunta": "¿Qué componente se agrega a la piperacilina para ampliar su espectro frente a betalactamasas?",
+    "opciones": [
+      "Ácido clavulánico",
+      "Tazobactam",
+      "Sulbactam",
+      "Avibactam"
+    ],
+    "correcta": 1,
+    "explicacion": "El tazobactam es el inhibidor de betalactamasas combinado con piperacilina, ampliando la cobertura frente a gramnegativos y anaerobios."
+  },
+  {
+    "pregunta": "¿Cuál es la única cefalosporina de 2ª generación con actividad frente a anaerobios como Bacteroides fragilis?",
+    "opciones": [
+      "Cefuroxima",
+      "Cefoxitina",
+      "Cefaclor",
+      "Cefalexina"
+    ],
+    "correcta": 1,
+    "explicacion": "La cefoxitina es la única cefalosporina de 2ª generación con actividad anaerobia significativa, útil en infecciones intraabdominales."
+  },
+  {
+    "pregunta": "¿A qué generación de cefalosporinas pertenece la cefalexina?",
+    "opciones": [
+      "1ª generación",
+      "2ª generación",
+      "3ª generación",
+      "4ª generación"
+    ],
+    "correcta": 0,
+    "explicacion": "La cefalexina es una cefalosporina de 1ª generación, activa frente a estafilococos y estreptococos, con menor cobertura de gramnegativos."
+  },
+  {
+    "pregunta": "¿Cuál cefalosporina de 3ª generación tiene mayor actividad específica frente a Pseudomonas aeruginosa?",
+    "opciones": [
+      "Cefotaxima",
+      "Ceftazidima",
+      "Ceftriaxona",
+      "Cefalexina"
+    ],
+    "correcta": 1,
+    "explicacion": "La ceftazidima destaca por su fuerte actividad antipseudomónica dentro de las cefalosporinas de 3ª generación."
+  },
+  {
+    "pregunta": "¿Cuál es el antibiótico de elección para la meningitis bacteriana en niños?",
+    "opciones": [
+      "Ceftriaxona",
+      "Amikacina",
+      "Vancomicina sola",
+      "Ciprofloxacina"
+    ],
+    "correcta": 0,
+    "explicacion": "La ceftriaxona es el antibiótico de elección en meningitis bacteriana pediátrica por su excelente cobertura y penetración al LCR."
+  },
+  {
+    "pregunta": "¿A qué generación de cefalosporinas pertenece el cefepime?",
+    "opciones": [
+      "2ª generación",
+      "3ª generación",
+      "4ª generación",
+      "5ª generación"
+    ],
+    "correcta": 2,
+    "explicacion": "El cefepime es una cefalosporina de 4ª generación, con buena cobertura tanto de gramnegativos (Pseudomonas) como grampositivos."
+  },
+  {
+    "pregunta": "¿Por qué la daptomicina no debe utilizarse para tratar neumonía?",
+    "opciones": [
+      "No penetra la barrera alveolo-capilar",
+      "Se inactiva por el surfactante pulmonar",
+      "Produce broncoespasmo severo",
+      "No tiene actividad contra ningún patógeno respiratorio"
+    ],
+    "correcta": 1,
+    "explicacion": "La daptomicina se inactiva por el surfactante pulmonar, por lo que no es eficaz en el tratamiento de la neumonía."
+  },
+  {
+    "pregunta": "¿Cuál es el único lipopéptido con actividad frente a Enterococcus resistente a vancomicina (VRE)?",
+    "opciones": [
+      "Linezolid",
+      "Daptomicina",
+      "Vancomicina",
+      "Teicoplanina"
+    ],
+    "correcta": 1,
+    "explicacion": "La daptomicina es el lipopéptido con actividad frente a grampositivos multirresistentes, incluido el VRE."
+  },
+  {
+    "pregunta": "¿Sobre qué estructura bacteriana actúan las quinolonas para inhibir la síntesis de ADN?",
+    "opciones": [
+      "La subunidad ribosomal 50S",
+      "La ADN girasa / topoisomerasa IV",
+      "La ARN polimerasa",
+      "La pared celular"
+    ],
+    "correcta": 1,
+    "explicacion": "Las quinolonas inhiben la ADN girasa y la topoisomerasa IV bacterianas, bloqueando la replicación del ADN."
+  },
+  {
+    "pregunta": "¿Por qué las quinolonas están contraindicadas en menores de 18 años?",
+    "opciones": [
+      "Producen hepatotoxicidad grave",
+      "Afectan el cartílago de crecimiento",
+      "Causan sordera irreversible",
+      "Producen anemia aplásica"
+    ],
+    "correcta": 1,
+    "explicacion": "Las quinolonas pueden afectar el cartílago de crecimiento en desarrollo, por lo que se contraindican en pediatría salvo excepciones."
+  },
+  {
+    "pregunta": "¿Qué quinolona de 3ª generación se prefiere para la neumonía adquirida en la comunidad por su cobertura de S. pneumoniae?",
+    "opciones": [
+      "Ciprofloxacina",
+      "Norfloxacina",
+      "Levofloxacina",
+      "Ácido nalidíxico"
+    ],
+    "correcta": 2,
+    "explicacion": "La levofloxacina (3ª generación) tiene buena cobertura de S. pneumoniae, útil en neumonía de la comunidad."
+  },
+  {
+    "pregunta": "¿Cuál es la quinolona de elección clásica para infecciones urinarias complicadas por su fuerte actividad frente a Pseudomonas aeruginosa?",
+    "opciones": [
+      "Levofloxacina",
+      "Ciprofloxacina",
+      "Moxifloxacina",
+      "Ácido pipemídico"
+    ],
+    "correcta": 1,
+    "explicacion": "La ciprofloxacina tiene muy buena actividad frente a enterobacterias y Pseudomonas, siendo de elección en ITU complicadas."
+  },
+  {
+    "pregunta": "¿Cuáles son las principales toxicidades dosis-dependientes de la amikacina?",
+    "opciones": [
+      "Hepatotoxicidad y pancreatitis",
+      "Nefrotoxicidad y ototoxicidad",
+      "Cardiotoxicidad y arritmias",
+      "Neuropatía periférica y anemia aplásica"
+    ],
+    "correcta": 1,
+    "explicacion": "Los aminoglucósidos como la amikacina producen nefrotoxicidad y ototoxicidad dosis-dependientes, requiriendo monitoreo."
+  },
+  {
+    "pregunta": "¿Qué formulación de penicilina se utiliza para el tratamiento de la sífilis y la profilaxis de la fiebre reumática?",
+    "opciones": [
+      "Penicilina G cristalina IV",
+      "Penicilina G benzatínica IM",
+      "Amoxicilina oral",
+      "Penicilina V oral"
+    ],
+    "correcta": 1,
+    "explicacion": "La penicilina G benzatínica, administrada IM cada 8-15 días, es de elección en sífilis y profilaxis de fiebre reumática."
+  },
+  {
+    "pregunta": "¿Cuál es el principal espectro adicional que aporta el tazobactam a la piperacilina, también compartido conceptualmente por las ureidopenicilinas frente a Pseudomonas?",
+    "opciones": [
+      "Cobertura de hongos",
+      "Cobertura de Pseudomonas aeruginosa y enterobacterias",
+      "Cobertura de virus respiratorios",
+      "Cobertura exclusiva de anaerobios"
+    ],
+    "correcta": 1,
+    "explicacion": "Las ureidopenicilinas como la piperacilina cubren Pseudomonas aeruginosa y enterobacterias, ampliando su espectro con tazobactam."
+  },
+  {
+    "pregunta": "¿Cuál es la principal ventaja de la azitromicina que permite un esquema corto de tratamiento?",
+    "opciones": [
+      "Su unión irreversible a la pared celular",
+      "Su vida media prolongada que permite dosis única diaria por pocos días",
+      "Su nula toxicidad gastrointestinal",
+      "Su actividad exclusiva contra anaerobios"
+    ],
+    "correcta": 1,
+    "explicacion": "La azitromicina tiene vida media prolongada, permitiendo esquemas cortos de 3-5 días con dosis única diaria (500 mg/día)."
+  },
+  {
+    "pregunta": "¿Qué combinación de estreptograminas se reserva para infecciones graves por Enterococcus faecium multirresistente?",
+    "opciones": [
+      "Linezolid",
+      "Quinupristina-dalfopristina",
+      "Daptomicina",
+      "Vancomicina"
+    ],
+    "correcta": 1,
+    "explicacion": "La quinupristina-dalfopristina es activa frente a E. faecium multirresistente (no cubre E. faecalis)."
+  },
+  {
+    "pregunta": "¿Por qué la rifampicina nunca debe usarse en monoterapia para el tratamiento de infecciones bacterianas activas?",
+    "opciones": [
+      "Por su alta toxicidad renal",
+      "Por el rápido desarrollo de resistencia bacteriana",
+      "Porque no penetra en tejidos",
+      "Porque solo actúa sobre virus"
+    ],
+    "correcta": 1,
+    "explicacion": "La rifampicina en monoterapia genera rápidamente resistencia bacteriana; su única excepción es la profilaxis de contactos de meningitis meningocócica o por H. influenzae."
+  },
+  {
+    "pregunta": "¿Por qué las tetraciclinas están contraindicadas en niños menores de 8 años?",
+    "opciones": [
+      "Producen sordera irreversible",
+      "Causan pigmentación dental permanente y afectan el hueso en crecimiento",
+      "Generan resistencia cruzada con penicilinas",
+      "Producen convulsiones"
+    ],
+    "correcta": 1,
+    "explicacion": "Las tetraciclinas son quelantes de calcio y se depositan en hueso y dientes, causando pigmentación dental permanente en menores de 8 años."
+  },
+  {
+    "pregunta": "¿Cuál es la complicación hematológica grave e idiosincrásica del cloranfenicol?",
+    "opciones": [
+      "Trombocitopenia transitoria",
+      "Anemia aplásica",
+      "Policitemia",
+      "Leucocitosis reactiva"
+    ],
+    "correcta": 1,
+    "explicacion": "El cloranfenicol puede causar anemia aplásica idiosincrásica e irreversible, limitando severamente su uso."
+  },
+  {
+    "pregunta": "¿Qué síndrome neonatal grave puede producir el cloranfenicol en prematuros?",
+    "opciones": [
+      "Síndrome del niño gris",
+      "Síndrome de Reye",
+      "Kernicterus",
+      "Síndrome de dificultad respiratoria"
+    ],
+    "correcta": 0,
+    "explicacion": "El síndrome del niño gris (letargo, hipotermia, cianosis, colapso cardiovascular) ocurre por inmadurez hepatorrenal para metabolizar el cloranfenicol."
+  },
+  {
+    "pregunta": "¿Cuál es la indicación principal de la dapsona?",
+    "opciones": [
+      "Tuberculosis multirresistente",
+      "Lepra (paucibacilar y multibacilar)",
+      "Neumonía por Pseudomonas",
+      "Meningitis meningocócica"
+    ],
+    "correcta": 1,
+    "explicacion": "La dapsona es una sulfona utilizada en el tratamiento de la lepra, combinada con rifampicina y clofazimina."
+  },
+  {
+    "pregunta": "¿Cuál de los siguientes carbapenems NO cubre Pseudomonas aeruginosa?",
+    "opciones": [
+      "Imipenem",
+      "Meropenem",
+      "Ertapenem",
+      "Doripenem"
+    ],
+    "correcta": 2,
+    "explicacion": "El ertapenem tiene espectro más limitado y no cubre Pseudomonas, Acinetobacter ni Enterococcus, a diferencia de imipenem y meropenem."
+  },
+  {
+    "pregunta": "¿Con qué fármaco se combina el imipenem para evitar su degradación renal?",
+    "opciones": [
+      "Tazobactam",
+      "Cilastatina",
+      "Clavulánico",
+      "Sulbactam"
+    ],
+    "correcta": 1,
+    "explicacion": "El imipenem se combina con cilastatina, un inhibidor de la deshidropeptidasa renal, para evitar su degradación."
+  },
+  {
+    "pregunta": "¿Cuál es el mecanismo de acción del trimetoprima-sulfametoxazol?",
+    "opciones": [
+      "Inhibición de la pared celular",
+      "Bloqueo secuencial de la síntesis de ácido fólico bacteriano",
+      "Inhibición de la ADN girasa",
+      "Alteración de la membrana citoplasmática"
+    ],
+    "correcta": 1,
+    "explicacion": "El TMP-SMX bloquea secuencialmente dos pasos de la síntesis de folato bacteriano (PABA y dihidrofolato reductasa), generando sinergia bactericida."
+  },
+  {
+    "pregunta": "La Acromicina, usada en infecciones por garrapatas como la enfermedad de Lyme, pertenece a qué familia de antibióticos?",
+    "opciones": [
+      "Macrólidos",
+      "Tetraciclinas",
+      "Quinolonas",
+      "Aminoglucósidos"
+    ],
+    "correcta": 1,
+    "explicacion": "La Acromicina es una tetraciclina que inhibe la síntesis proteica a nivel de la subunidad ribosomal 30S."
+  },
+  {
+    "pregunta": "¿Cuál de los siguientes antibióticos NO tiene actividad significativa frente a Pseudomonas aeruginosa?",
+    "opciones": [
+      "Ceftazidima",
+      "Piperacilina-tazobactam",
+      "Cefalexina",
+      "Amikacina"
+    ],
+    "correcta": 2,
+    "explicacion": "La cefalexina (1ª generación) tiene escasa actividad frente a Pseudomonas; ceftazidima, piperacilina-tazobactam y amikacina sí la cubren."
+  },
+  {
+    "pregunta": "Según la regla mnemotécnica clásica, ¿qué antibiótico se prefiere para anaerobios 'del diafragma para abajo'?",
+    "opciones": [
+      "Clindamicina",
+      "Metronidazol",
+      "Vancomicina",
+      "Azitromicina"
+    ],
+    "correcta": 1,
+    "explicacion": "El metronidazol se prefiere para anaerobios 'del diafragma para abajo' (intraabdominales/pélvicos); la clindamicina para los de 'arriba' (orofaríngeos/pulmonares)."
+  },
+  {
+    "pregunta": "¿Cuál es el tratamiento de elección para una ITU baja no complicada en mujeres adultas, en dosis única?",
+    "opciones": [
+      "Ciprofloxacina 500 mg VO",
+      "Fosfomicina 3 g VO en dosis única",
+      "Amoxicilina 500 mg VO",
+      "Ceftriaxona 1 g IM"
+    ],
+    "correcta": 1,
+    "explicacion": "La fosfomicina en dosis oral única de 3 g es de elección para la cistitis no complicada por su excelente concentración urinaria."
+  },
+  {
+    "pregunta": "¿Para qué tipo de infecciones se reserva la colistina como último recurso?",
+    "opciones": [
+      "Infecciones por grampositivos multirresistentes",
+      "Infecciones graves por gramnegativos multirresistentes (Pseudomonas, Acinetobacter)",
+      "Infecciones fúngicas invasivas",
+      "Infecciones virales graves"
+    ],
+    "correcta": 1,
+    "explicacion": "La colistina se reserva para gramnegativos multirresistentes por su toxicidad renal y neurológica dosis-dependiente."
+  },
+  {
+    "pregunta": "¿Qué característica diferencia a las vacunas conjugadas de las polisacáridas puras?",
+    "opciones": [
+      "Las conjugadas usan virus vivos atenuados",
+      "Las conjugadas unen el polisacárido a una proteína transportadora, generando buena respuesta inmune en menores de 2 años",
+      "Las polisacáridas son más inmunogénicas en lactantes",
+      "No existe diferencia inmunológica entre ambas"
+    ],
+    "correcta": 1,
+    "explicacion": "Las vacunas conjugadas generan respuesta T-dependiente, siendo eficaces incluso en menores de 2 años, a diferencia de las polisacáridas puras."
+  },
+  {
+    "pregunta": "¿En qué semanas de gestación se recomienda aplicar la vacuna dTpa a las embarazadas?",
+    "opciones": [
+      "Entre las semanas 5 y 12",
+      "Entre las semanas 20 y 32",
+      "Entre las semanas 36 y 40",
+      "Solo en el posparto"
+    ],
+    "correcta": 1,
+    "explicacion": "La dTpa se aplica entre las semanas 20 y 32 de gestación para proteger a la madre y transferir inmunidad pasiva al recién nacido."
+  },
+  {
+    "pregunta": "¿Qué son las 'vacunas de bloqueo'?",
+    "opciones": [
+      "Vacunas aplicadas de rutina en el calendario infantil",
+      "Vacunas administradas a contactos susceptibles de un caso para cortar la cadena de transmisión",
+      "Vacunas que solo se dan a embarazadas",
+      "Vacunas inactivadas de uso exclusivo hospitalario"
+    ],
+    "correcta": 1,
+    "explicacion": "La vacunación de bloqueo se aplica a contactos susceptibles de un caso confirmado para frenar la propagación de un brote."
+  },
+  {
+    "pregunta": "¿Hasta qué edad se aplica el componente anti-Haemophilus influenzae tipo b (Hib) en el calendario argentino?",
+    "opciones": [
+      "Hasta los 2 años",
+      "Hasta los 5 años",
+      "Hasta los 11 años",
+      "De por vida con refuerzos anuales"
+    ],
+    "correcta": 1,
+    "explicacion": "El componente Hib se aplica solo hasta los 5 años; después no se incluye en los refuerzos (dTpa) del calendario."
+  },
+  {
+    "pregunta": "¿Cómo se administra la vacuna BCG y cuál es su objetivo principal?",
+    "opciones": [
+      "Vía oral, para prevenir la TBC pulmonar del adulto",
+      "Vía intradérmica al recién nacido, para prevenir formas graves de TBC (miliar y meníngea)",
+      "Vía intramuscular a los 5 años, para prevenir la TBC pulmonar",
+      "Vía subcutánea a los 65 años, para prevenir reactivación"
+    ],
+    "correcta": 1,
+    "explicacion": "La BCG se aplica intradérmica en el recién nacido para prevenir formas graves (miliar y meníngea) de TBC, no la forma pulmonar del adulto."
+  },
+  {
+    "pregunta": "¿Cuál es la formulación de vacuna contra la tos ferina que se administra en la adolescencia y a las embarazadas, a diferencia de la usada en lactantes?",
+    "opciones": [
+      "Triple bacteriana celular (DTP)",
+      "Triple bacteriana acelular (dTpa)",
+      "Pentavalente",
+      "Hexavalente"
+    ],
+    "correcta": 1,
+    "explicacion": "La dTpa (acelular) se usa en adolescentes de 11 años y embarazadas; en lactantes se usa la pentavalente/hexavalente con componente celular o acelular."
+  },
+  {
+    "pregunta": "¿A qué edad se administra el refuerzo de la vacuna cuádruple bacteriana (DTP-Hib)?",
+    "opciones": [
+      "Al nacer",
+      "A los 15-18 meses",
+      "A los 5 años",
+      "A los 11 años"
+    ],
+    "correcta": 1,
+    "explicacion": "La cuádruple bacteriana se administra como refuerzo único a los 15-18 meses, protegiendo contra difteria, tétanos, tos ferina y Hib."
+  },
+  {
+    "pregunta": "¿Qué componente diferencia a la vacuna hexavalente de la pentavalente?",
+    "opciones": [
+      "El componente antimeningocócico",
+      "El poliovirus inactivado (IPV)",
+      "El componente antineumocócico",
+      "El componente antirrotavírico"
+    ],
+    "correcta": 1,
+    "explicacion": "La hexavalente agrega el componente de poliovirus inactivado (IPV) respecto a la pentavalente (DTP-Hib-HB)."
+  },
+  {
+    "pregunta": "¿Cuál es el esquema de dosis de la vacuna pentavalente en el calendario argentino?",
+    "opciones": [
+      "1 dosis única al nacer",
+      "2, 4 y 6 meses, con refuerzo opcional a los 18 meses",
+      "Solo a los 11 años",
+      "Cada 10 años en adultos"
+    ],
+    "correcta": 1,
+    "explicacion": "La pentavalente (DPT-HB-Hib) se aplica a los 2, 4 y 6 meses, con una cuarta dosis de refuerzo opcional a los 18 meses."
+  },
+  {
+    "pregunta": "¿A qué edad se aplica la primera dosis de la vacuna triple viral (SRP) en el calendario argentino?",
+    "opciones": [
+      "Al nacer",
+      "A los 12 meses",
+      "A los 2 años",
+      "A los 5 años"
+    ],
+    "correcta": 1,
+    "explicacion": "La primera dosis de triple viral (sarampión-rubéola-parotiditis) se aplica a los 12 meses, con refuerzo a los 5-6 años."
+  },
+  {
+    "pregunta": "¿Cuál es el límite de edad máximo para aplicar la vacuna contra rotavirus?",
+    "opciones": [
+      "4 meses",
+      "6 meses",
+      "8 meses",
+      "12 meses"
+    ],
+    "correcta": 2,
+    "explicacion": "Ninguna dosis de la vacuna antirrotavírica debe aplicarse después de los 8 meses de edad, por el riesgo de invaginación intestinal."
+  },
+  {
+    "pregunta": "¿Qué tipo de vacuna antineumocócica se indica de rutina a los 65 años en dosis única?",
+    "opciones": [
+      "Conjugada 13-valente (PCV13)",
+      "Polisacárida 23-valente (PPSV23)",
+      "Conjugada 7-valente",
+      "Toxoide neumocócico"
+    ],
+    "correcta": 1,
+    "explicacion": "La vacuna polisacárida 23-valente (PPSV23) se indica en dosis única a los 65 años, o antes si hay comorbilidades."
+  },
+  {
+    "pregunta": "¿Cuál es uno de los principales fundamentos para vacunar de forma universal contra la hepatitis B al recién nacido?",
+    "opciones": [
+      "Prevenir la transmisión perinatal madre-hijo",
+      "Reemplazar la necesidad de vacunar al personal de salud",
+      "Sustituir el cribado prenatal de HBsAg",
+      "Prevenir exclusivamente la hepatitis A"
+    ],
+    "correcta": 0,
+    "explicacion": "La vacunación universal del recién nacido dentro de las 12 h de vida previene la transmisión perinatal madre-hijo del VHB, difícil de evitar solo con el cribado prenatal."
+  },
+  {
+    "pregunta": "¿Cuántas dosis de la vacuna contra el VPH se aplican actualmente a los 11 años en el Calendario Nacional argentino (esquema simplificado avalado por la OMS)?",
+    "opciones": [
+      "3 dosis",
+      "2 dosis",
+      "1 dosis única",
+      "4 dosis"
+    ],
+    "correcta": 2,
+    "explicacion": "Desde 2023 se aplica una dosis única de Gardasil 9 a los 11 años en niñas y niños; en inmunocomprometidos de 11-26 años se mantienen 3 dosis."
+  },
+  {
+    "pregunta": "¿Cada cuánto tiempo se recomienda el refuerzo de la vacuna doble bacteriana (dT) en mayores de 65 años?",
+    "opciones": [
+      "Cada 5 años",
+      "Cada 10 años",
+      "Una sola vez en la vida",
+      "Anualmente"
+    ],
+    "correcta": 1,
+    "explicacion": "El refuerzo de la doble bacteriana (dT) se recomienda cada 10 años en adultos, incluidos los mayores de 65 años."
+  },
+  {
+    "pregunta": "¿A qué edad se aplica la dosis única de la vacuna contra la fiebre amarilla en el calendario argentino?",
+    "opciones": [
+      "12 meses",
+      "18 meses",
+      "5 años",
+      "11 años"
+    ],
+    "correcta": 1,
+    "explicacion": "La vacuna contra la fiebre amarilla se aplica en dosis única a los 18 meses (con refuerzo a los 11 años), solo en zonas de riesgo."
+  },
+  {
+    "pregunta": "¿Qué tipo de vacuna antipoliomielítica se utiliza actualmente en Argentina?",
+    "opciones": [
+      "Sabin oral (virus vivo atenuado)",
+      "Salk inactivada (IPV)",
+      "Vacuna de subunidades",
+      "Vacuna de ARN mensajero"
+    ],
+    "correcta": 1,
+    "explicacion": "Argentina utiliza actualmente la vacuna Salk (IPV) inactivada, ya no la Sabin oral."
+  },
+  {
+    "pregunta": "¿Cuántas dosis de vacuna antigripal requieren los niños menores de 9 años que la reciben por primera vez?",
+    "opciones": [
+      "1 dosis única",
+      "2 dosis separadas por 4 semanas",
+      "3 dosis mensuales",
+      "Ninguna, no está indicada en menores de 9 años"
+    ],
+    "correcta": 1,
+    "explicacion": "Los niños <9 años que reciben la vacuna antigripal por primera vez requieren 2 dosis separadas por 4 semanas."
+  },
+  {
+    "pregunta": "¿Qué cepa viral contiene la vacuna contra la varicela?",
+    "opciones": [
+      "Cepa Oka atenuada",
+      "Cepa Jeryl Lynn",
+      "Cepa Edmonston-Zagreb",
+      "Cepa RIX4414"
+    ],
+    "correcta": 0,
+    "explicacion": "La vacuna contra la varicela contiene la cepa OKA atenuada del virus varicela-zóster."
+  },
+  {
+    "pregunta": "¿Cuál es el agente etiológico del dengue y su vector de transmisión?",
+    "opciones": [
+      "Un Alphavirus transmitido por Anopheles",
+      "Un Flavivirus transmitido por la hembra de Aedes aegypti",
+      "Un Bunyavirus transmitido por garrapatas",
+      "Un Togavirus transmitido por roedores"
+    ],
+    "correcta": 1,
+    "explicacion": "El dengue es causado por un Flavivirus (serotipos DEN1-4), transmitido por la hembra del mosquito Aedes aegypti."
+  },
+  {
+    "pregunta": "En un paciente con sospecha de dengue clásico, ¿qué analgésico/antipirético se debe evitar por riesgo de sangrado?",
+    "opciones": [
+      "Paracetamol",
+      "Ácido acetilsalicílico (AAS) y AINEs",
+      "Metamizol",
+      "Ibuprofeno en dosis única"
+    ],
+    "correcta": 1,
+    "explicacion": "En el dengue se debe evitar la aspirina y los AINEs por el riesgo de sangrado; se prefiere paracetamol."
+  },
+  {
+    "pregunta": "¿Cuál es la principal vía de transmisión del hantavirus a los humanos?",
+    "opciones": [
+      "Picadura de mosquito",
+      "Aerosoles de excretas de roedores",
+      "Contacto con agua contaminada con orina de roedores",
+      "Transmisión persona a persona por vía respiratoria"
+    ],
+    "correcta": 1,
+    "explicacion": "El hantavirus se transmite principalmente por aerosolización de excretas de roedores infectados (serotipo Andes en Argentina)."
+  },
+  {
+    "pregunta": "A diferencia del hantavirus, ¿cómo se adquiere típicamente la leptospirosis?",
+    "opciones": [
+      "Por aerosoles de excretas de roedores",
+      "Por contacto de piel/mucosas con agua o suelo contaminados con orina de animales",
+      "Por picadura de mosquito Aedes",
+      "Por vía respiratoria persona a persona"
+    ],
+    "correcta": 1,
+    "explicacion": "La leptospirosis se adquiere por contacto directo con agua o suelo contaminados con orina de roedores u otros animales infectados."
+  },
+  {
+    "pregunta": "¿Cuál es el tratamiento antibiótico de elección en la fase de bacteriemia de la leptospirosis?",
+    "opciones": [
+      "Vancomicina",
+      "Penicilina, ampicilina o amoxicilina",
+      "Ciprofloxacina",
+      "Azitromicina"
+    ],
+    "correcta": 1,
+    "explicacion": "La leptospirosis en fase de bacteriemia se trata con penicilina IV o ampicilina/amoxicilina oral."
+  },
+  {
+    "pregunta": "¿Cuál es el virus causante de la fiebre hemorrágica argentina y su vacuna específica?",
+    "opciones": [
+      "Virus Junín, vacuna Candid#1",
+      "Virus Andes, vacuna Rotarix",
+      "Virus Machupo, vacuna Sabin",
+      "Virus Guanarito, vacuna BCG"
+    ],
+    "correcta": 0,
+    "explicacion": "La fiebre hemorrágica argentina es causada por el virus Junín; existe la vacuna Candid#1 para zonas de riesgo."
+  },
+  {
+    "pregunta": "¿Cuál es la utilidad clínica de reconocer el síndrome retroviral agudo?",
+    "opciones": [
+      "No tiene relevancia clínica",
+      "Permite diagnosticar la fase aguda del VIH e iniciar tempranamente la terapia antirretroviral",
+      "Indica siempre progresión a SIDA en semanas",
+      "Descarta definitivamente la infección por VIH"
+    ],
+    "correcta": 1,
+    "explicacion": "El síndrome retroviral agudo corresponde a la fase aguda del VIH; su reconocimiento permite el diagnóstico e inicio temprano de la TARV."
+  },
+  {
+    "pregunta": "¿Qué signos caracterizan al síndrome de hipertensión endorraquídea dentro del síndrome meníngeo?",
+    "opciones": [
+      "Edema de papila y bradicardia",
+      "Rigidez de nuca, posición en gatillo de fusil, Kernig y Brudzinski positivos",
+      "Convulsiones y afasia",
+      "Fiebre y púrpura"
+    ],
+    "correcta": 1,
+    "explicacion": "El síndrome de hipertensión endorraquídea incluye rigidez de nuca, posición en gatillo de fusil y los signos de Kernig y Brudzinski positivos."
+  },
+  {
+    "pregunta": "¿Cuál es el antibiótico de elección para la profilaxis de contactos de meningitis meningocócica en una embarazada?",
+    "opciones": [
+      "Rifampicina",
+      "Ciprofloxacina",
+      "Ceftriaxona IM",
+      "Doxiciclina"
+    ],
+    "correcta": 2,
+    "explicacion": "La ceftriaxona IM es de elección en embarazadas para la profilaxis de contactos de meningitis meningocócica, evitando rifampicina y quinolonas."
+  },
+  {
+    "pregunta": "¿Qué hallazgo en LCR es característico de la meningitis meningocócica?",
+    "opciones": [
+      "LCR claro con predominio linfocitario",
+      "LCR turbio con pleocitosis neutrofílica y diplococos gramnegativos",
+      "LCR xantocrómico con eosinofilia",
+      "LCR normal en todos los parámetros"
+    ],
+    "correcta": 1,
+    "explicacion": "La meningitis meningocócica produce LCR turbio, con hiperproteinorraquia, hipoglucorraquia, pleocitosis neutrofílica y diplococos gramnegativos."
+  },
+  {
+    "pregunta": "¿Qué agente causa meningitis con diplococos grampositivos lanceolados en el LCR?",
+    "opciones": [
+      "Neisseria meningitidis",
+      "Streptococcus pneumoniae",
+      "Listeria monocytogenes",
+      "Haemophilus influenzae"
+    ],
+    "correcta": 1,
+    "explicacion": "Streptococcus pneumoniae se identifica como diplococos grampositivos lanceolados en el LCR de la meningitis neumocócica."
+  },
+  {
+    "pregunta": "¿Qué tipo de meningitis produce típicamente la leptospirosis?",
+    "opciones": [
+      "Meningitis purulenta con pleocitosis neutrofílica",
+      "Meningitis a líquido claro con pleocitosis mononuclear",
+      "Meningitis hemorrágica exclusiva",
+      "No produce compromiso meníngeo"
+    ],
+    "correcta": 1,
+    "explicacion": "La leptospirosis produce una meningitis a líquido claro, con glucosa normal, proteínas levemente elevadas y pleocitosis mononuclear."
+  },
+  {
+    "pregunta": "¿Por qué se agrega ampicilina al esquema empírico de meningitis en mayores de 60 años?",
+    "opciones": [
+      "Para cubrir Neisseria meningitidis",
+      "Para cubrir Listeria monocytogenes, no cubierta por las cefalosporinas",
+      "Para potenciar el efecto de la vancomicina",
+      "Para reducir la neurotoxicidad del tratamiento"
+    ],
+    "correcta": 1,
+    "explicacion": "Listeria monocytogenes es más frecuente en mayores de 60 años y no está cubierta por las cefalosporinas, por lo que se agrega ampicilina."
+  },
+  {
+    "pregunta": "¿Cuál es la etiología más frecuente de la meningitis aséptica?",
+    "opciones": [
+      "Bacteriana (neumococo)",
+      "Viral",
+      "Micótica (Cryptococcus)",
+      "Parasitaria"
+    ],
+    "correcta": 1,
+    "explicacion": "La meningitis aséptica es habitualmente de etiología viral, con LCR claro, proteínas algo elevadas y predominio linfocitario, de curso autolimitado."
+  },
+  {
+    "pregunta": "¿Cuál es el agente más frecuente de meningitis bacteriana en niños de 3 a 18 años?",
+    "opciones": [
+      "Listeria monocytogenes",
+      "Streptococcus agalactiae",
+      "Streptococcus pneumoniae, Neisseria meningitidis y H. influenzae",
+      "Escherichia coli"
+    ],
+    "correcta": 2,
+    "explicacion": "En niños de 3-18 años los agentes más frecuentes son S. pneumoniae, N. meningitidis y H. influenzae."
+  },
+  {
+    "pregunta": "¿Cuál es el tratamiento empírico de elección para la meningitis bacteriana en un recién nacido menor de 1 mes?",
+    "opciones": [
+      "Ceftriaxona sola",
+      "Ampicilina + gentamicina",
+      "Vancomicina + rifampicina",
+      "Penicilina G sola"
+    ],
+    "correcta": 1,
+    "explicacion": "En menores de 1 mes se usa ampicilina + gentamicina para cubrir S. agalactiae, E. coli y Listeria; en 1-3 meses se agrega cefotaxima."
+  },
+  {
+    "pregunta": "¿Cuál es el agente causal más frecuente de la gangrena gaseosa (mionecrosis)?",
+    "opciones": [
+      "Streptococcus pyogenes",
+      "Clostridium perfringens",
+      "Staphylococcus aureus",
+      "Bacteroides fragilis"
+    ],
+    "correcta": 1,
+    "explicacion": "Clostridium perfringens es el principal agente de la gangrena gaseosa, produciendo necrosis muscular por sus toxinas alfa y perfringolisina O."
+  },
+  {
+    "pregunta": "¿Cuál es el esquema antibiótico clásico para la gangrena gaseosa además del desbridamiento quirúrgico?",
+    "opciones": [
+      "Vancomicina sola",
+      "Penicilina G + clindamicina",
+      "Ciprofloxacina sola",
+      "Fluconazol"
+    ],
+    "correcta": 1,
+    "explicacion": "El tratamiento combina desbridamiento quirúrgico amplio con penicilina G más clindamicina."
+  },
+  {
+    "pregunta": "¿Cuál es el principal agente causal de la fascitis necrotizante también llamada 'gangrena estreptocócica'?",
+    "opciones": [
+      "Streptococcus pyogenes",
+      "Clostridium perfringens",
+      "Escherichia coli",
+      "Pseudomonas aeruginosa"
+    ],
+    "correcta": 0,
+    "explicacion": "Streptococcus pyogenes es el agente principal de la fascitis necrotizante o gangrena estreptocócica."
+  },
+  {
+    "pregunta": "¿Qué región anatómica afecta característicamente la gangrena de Fournier?",
+    "opciones": [
+      "Miembros inferiores",
+      "Región perineal, perianal y genital",
+      "Cuero cabelludo",
+      "Cara y cuello"
+    ],
+    "correcta": 1,
+    "explicacion": "La gangrena de Fournier es una fascitis necrotizante polimicrobiana que afecta la región perineal, perianal y genital."
+  },
+  {
+    "pregunta": "¿Cómo se denomina la infección necrotizante polimicrobiana de piel y tejido subcutáneo, distinta de la de Fournier, que también compromete estas zonas cuando se extiende a periné?",
+    "opciones": [
+      "Gangrena sinérgica de Meleney",
+      "Erisipela",
+      "Celulitis simple",
+      "Impétigo"
+    ],
+    "correcta": 0,
+    "explicacion": "La gangrena sinérgica de Meleney es una infección necrotizante polimicrobiana de piel/tejido subcutáneo; cuando compromete periné se denomina gangrena de Fournier."
+  },
+  {
+    "pregunta": "¿Qué signo temprano caracteriza a la mionecrosis/fascitis necrotizante posinyectable en las primeras 24 horas?",
+    "opciones": [
+      "Necrosis cutánea franca con pérdida de sensibilidad",
+      "Eritema y edema mal delimitados con calor y dolor local, sin compromiso linfático",
+      "Ampollas serohemáticas generalizadas",
+      "Gangrena establecida"
+    ],
+    "correcta": 1,
+    "explicacion": "En las primeras 24 h se observa eritema y edema mal delimitados con calor y dolor local, sin linfangitis, que progresa si no se trata."
+  },
+  {
+    "pregunta": "¿Cuál es el agente causal del tétanos y el signo clínico clásico que da nombre al 'trismos'?",
+    "opciones": [
+      "Clostridium botulinum, con parálisis flácida",
+      "Clostridium tetani, con incapacidad de abrir la boca",
+      "Clostridium perfringens, con necrosis muscular",
+      "Clostridium difficile, con diarrea"
+    ],
+    "correcta": 1,
+    "explicacion": "El tétanos es causado por Clostridium tetani; el trismos (incapacidad de abrir la boca) es un signo clásico junto con opistótonos y risa sardónica."
+  },
+  {
+    "pregunta": "Ante una herida con esquema de vacunación antitetánica completo, ¿cuándo se recomienda revacunar aunque el esquema esté al día?",
+    "opciones": [
+      "Nunca, si el esquema está completo no se revacuna",
+      "Si la herida es de riesgo y pasaron más de 5 años desde el último refuerzo",
+      "Solo si han pasado más de 20 años",
+      "Únicamente en heridas leves y superficiales"
+    ],
+    "correcta": 1,
+    "explicacion": "En heridas de riesgo (tetanógenas) se recomienda revacunar si pasaron más de 5 años del último refuerzo, aunque el esquema esté completo."
+  },
+  {
+    "pregunta": "¿Cuál es el mecanismo de acción de la toxina botulínica?",
+    "opciones": [
+      "Bloquea la liberación de acetilcolina en la placa motora",
+      "Inhibe la síntesis de proteínas ribosomales",
+      "Produce hemólisis masiva",
+      "Bloquea los canales de sodio nerviosos"
+    ],
+    "correcta": 0,
+    "explicacion": "La toxina de Clostridium botulinum bloquea la liberación de acetilcolina en la unión neuromuscular, causando parálisis flácida descendente."
+  },
+  {
+    "pregunta": "¿Cuál es la principal fuente de intoxicación en el botulismo alimentario?",
+    "opciones": [
+      "Carnes rojas mal cocidas",
+      "Conservas caseras mal esterilizadas con toxina preformada",
+      "Agua contaminada con heces",
+      "Leche no pasteurizada"
+    ],
+    "correcta": 1,
+    "explicacion": "El botulismo alimentario se produce por ingesta de toxina preformada de C. botulinum, típicamente en conservas caseras mal esterilizadas."
+  },
+  {
+    "pregunta": "¿Cuál es la tríada característica del botulismo infantil?",
+    "opciones": [
+      "Fiebre, diarrea y vómitos",
+      "Constipación >3 días, hipotonía muscular y reflejo fotomotor disminuido",
+      "Exantema, adenopatías y fiebre alta",
+      "Tos, disnea y sibilancias"
+    ],
+    "correcta": 1,
+    "explicacion": "La tríada del botulismo infantil es constipación >3 días, hipotonía muscular y reflejo fotomotor disminuido, típicamente por ingesta de esporas en miel."
+  },
+  {
+    "pregunta": "¿Cuál es el tratamiento de elección para la neumonía por Pneumocystis jirovecii?",
+    "opciones": [
+      "Anfotericina B",
+      "Trimetoprima-sulfametoxazol (TMP-SMX)",
+      "Ceftriaxona",
+      "Azitromicina"
+    ],
+    "correcta": 1,
+    "explicacion": "El TMP-SMX es el tratamiento de elección para la neumocistosis, durante 21 días; la pentamidina es alternativa si no se tolera."
+  },
+  {
+    "pregunta": "En el score CURB-65 para neumonía, ¿qué puntaje indica alto riesgo de mortalidad y necesidad de hospitalización?",
+    "opciones": [
+      "0-1 puntos",
+      "2 puntos",
+      "≥3 puntos",
+      "Cualquier puntaje mayor a 0"
+    ],
+    "correcta": 2,
+    "explicacion": "Un puntaje ≥3 en el CURB-65 indica alto riesgo de mortalidad, requiriendo hospitalización y posible ingreso a UTI."
+  },
+  {
+    "pregunta": "¿Cuál es el agente causal de la criptococosis pulmonar más frecuente en el hemisferio sur?",
+    "opciones": [
+      "Cryptococcus neoformans",
+      "Cryptococcus gattii",
+      "Histoplasma capsulatum",
+      "Coccidioides posadasii"
+    ],
+    "correcta": 1,
+    "explicacion": "Cryptococcus gattii es más frecuente en el hemisferio sur, mientras que C. neoformans tiene distribución cosmopolita."
+  },
+  {
+    "pregunta": "¿Cuál es el agente causal de la psitacosis y su fuente de transmisión?",
+    "opciones": [
+      "Chlamydia psittaci, transmitida por aves (loros, papagayos)",
+      "Mycoplasma pneumoniae, transmitida persona a persona",
+      "Coxiella burnetii, transmitida por ganado",
+      "Legionella pneumophila, transmitida por agua"
+    ],
+    "correcta": 0,
+    "explicacion": "La psitacosis es causada por Chlamydia psittaci, transmitida por inhalación de partículas de heces, secreciones o plumas de aves infectadas."
+  },
+  {
+    "pregunta": "¿Qué agentes causan la angina de Plaut-Vincent (faringitis ulceronecrótica)?",
+    "opciones": [
+      "Streptococcus pyogenes solo",
+      "Asociación fusoespirilar (Fusobacterium + espiroquetas anaerobias)",
+      "Candida albicans",
+      "Corynebacterium diphtheriae"
+    ],
+    "correcta": 1,
+    "explicacion": "La angina de Plaut-Vincent es causada por la asociación fusoespirilar de Fusobacterium con espiroquetas anaerobias."
+  },
+  {
+    "pregunta": "¿Cuál es el agente causal de la coqueluche (tos ferina) y su tratamiento de elección?",
+    "opciones": [
+      "Bordetella pertussis, tratada con macrólidos",
+      "Corynebacterium diphtheriae, tratada con penicilina",
+      "Mycoplasma pneumoniae, tratado con quinolonas",
+      "Haemophilus influenzae, tratado con ceftriaxona"
+    ],
+    "correcta": 0,
+    "explicacion": "La coqueluche es causada por Bordetella pertussis; se trata con macrólidos (eritromicina, azitromicina o claritromicina)."
+  },
+  {
+    "pregunta": "¿En qué situación se debe tratar la bacteriuria asintomática?",
+    "opciones": [
+      "En todos los pacientes, siempre que se detecte",
+      "Solo en embarazadas, por el riesgo de pielonefritis y aborto",
+      "Solo en varones jóvenes",
+      "Nunca se trata, independientemente del contexto"
+    ],
+    "correcta": 1,
+    "explicacion": "La bacteriuria asintomática solo se trata en embarazadas, por el riesgo de progresión a pielonefritis y complicaciones obstétricas."
+  },
+  {
+    "pregunta": "¿Qué hallazgo en el sedimento urinario indica compromiso renal alto (pielonefritis) más que cistitis simple?",
+    "opciones": [
+      "Piuria aislada",
+      "Cilindros leucocitarios",
+      "Nitritos positivos",
+      "Hematuria microscópica aislada"
+    ],
+    "correcta": 1,
+    "explicacion": "Los cilindros leucocitarios indican compromiso renal (ITU alta/pielonefritis), a diferencia de la cistitis que se limita a piuria y bacteriuria."
+  },
+  {
+    "pregunta": "¿Cuál es el recuento de UFC/mL considerado significativo en un urocultivo de chorro medio?",
+    "opciones": [
+      "Más de 1.000 UFC/mL",
+      "Más de 10.000 UFC/mL",
+      "Más de 100.000 UFC/mL",
+      "Cualquier crecimiento bacteriano"
+    ],
+    "correcta": 2,
+    "explicacion": "Un urocultivo de chorro medio se considera significativo con un recuento mayor a 100.000 UFC/mL."
+  },
+  {
+    "pregunta": "¿Por qué se debe evitar el uso de aspirina en niños con varicela?",
+    "opciones": [
+      "Aumenta el riesgo de sangrado digestivo",
+      "Riesgo de síndrome de Reye",
+      "Produce alergia cruzada con el virus",
+      "Interfiere con el aciclovir"
+    ],
+    "correcta": 1,
+    "explicacion": "El uso de aspirina en niños con infecciones virales como la varicela se asocia al síndrome de Reye, una encefalopatía grave con daño hepático."
+  },
+  {
+    "pregunta": "¿Cuál es la dosis y vía habitual del aciclovir para tratar la varicela no complicada en un niño?",
+    "opciones": [
+      "IV 30 mg/kg/día por 5 días en todos los casos",
+      "20 mg/kg/dosis VO cada 8 h por 7 días",
+      "Tópico exclusivamente",
+      "No se recomienda aciclovir en niños inmunocompetentes"
+    ],
+    "correcta": 1,
+    "explicacion": "En varicela no complicada se puede usar aciclovir oral 20 mg/kg/dosis cada 8 h por 7 días para acortar y atenuar el cuadro."
+  },
+  {
+    "pregunta": "¿Cuál de las siguientes es una complicación neurológica reconocida de la varicela?",
+    "opciones": [
+      "Síndrome de Guillain-Barré",
+      "Enfermedad de Parkinson",
+      "Esclerosis múltiple",
+      "Enfermedad de Alzheimer"
+    ],
+    "correcta": 0,
+    "explicacion": "La varicela puede complicarse con encefalitis, mielitis transversa y síndrome de Guillain-Barré, entre otras complicaciones neurológicas."
+  },
+  {
+    "pregunta": "¿En qué trimestre del embarazo la infección materna por varicela conlleva mayor riesgo de varicela congénita grave?",
+    "opciones": [
+      "Primer trimestre",
+      "Segundo trimestre",
+      "Tercer trimestre",
+      "El riesgo es igual en todos los trimestres"
+    ],
+    "correcta": 0,
+    "explicacion": "La infección materna en el primer trimestre conlleva mayor riesgo de afectación fetal grave (síndrome de varicela congénita)."
+  },
+  {
+    "pregunta": "¿Qué exantema papulovesiculoso se presenta clásicamente con vesículas en manos, pies y boca?",
+    "opciones": [
+      "Varicela",
+      "Exantema por enterovirus (Coxsackie)",
+      "Impétigo",
+      "Herpes simple genital"
+    ],
+    "correcta": 1,
+    "explicacion": "El síndrome mano-pie-boca por enterovirus (Coxsackie, Echovirus) se presenta con vesículas en esas localizaciones, fiebre y odinofagia."
+  },
+  {
+    "pregunta": "¿Cuál es la única enfermedad exantemática clásica de causa bacteriana entre las 'enfermedades exantemáticas'?",
+    "opciones": [
+      "Sarampión",
+      "Rubéola",
+      "Escarlatina",
+      "Megaloeritema"
+    ],
+    "correcta": 2,
+    "explicacion": "La escarlatina, causada por Streptococcus pyogenes, es la única exantemática clásica de origen bacteriano."
+  },
+  {
+    "pregunta": "¿Qué complicación no supurativa grave puede seguir a una escarlatina no tratada?",
+    "opciones": [
+      "Absceso periamigdalino",
+      "Glomerulonefritis postestreptocócica",
+      "Otitis media aguda",
+      "Neumonía por aspiración"
+    ],
+    "correcta": 1,
+    "explicacion": "La fiebre reumática y la glomerulonefritis postestreptocócica son complicaciones no supurativas de la infección por S. pyogenes."
+  },
+  {
+    "pregunta": "¿Qué signo patognomónico aparece en el periodo de invasión del sarampión, antes del exantema?",
+    "opciones": [
+      "Manchas de Koplik",
+      "Lengua aframbuesada",
+      "Exantema en 'cara sucia'",
+      "Adenopatía cervical única"
+    ],
+    "correcta": 0,
+    "explicacion": "Las manchas de Koplik (puntos blanquecinos en la mucosa yugal) son patognomónicas del periodo de invasión del sarampión, antes del exantema."
+  },
+  {
+    "pregunta": "Ante la sospecha de un caso de sarampión, ¿en cuántas horas se debe notificar a las autoridades sanitarias?",
+    "opciones": [
+      "Dentro de las 24 horas",
+      "Dentro de los 7 días",
+      "Dentro del mes",
+      "No es de notificación obligatoria"
+    ],
+    "correcta": 0,
+    "explicacion": "El sarampión es de notificación obligatoria inmediata (dentro de las 24 h) por ser altamente contagioso y requerir bloqueo epidemiológico."
+  },
+  {
+    "pregunta": "¿Cuál es la principal preocupación clínica de la infección por rubéola durante el embarazo?",
+    "opciones": [
+      "Parto prematuro exclusivamente",
+      "Embriopatía/síndrome de rubéola congénita",
+      "Preeclampsia",
+      "Diabetes gestacional"
+    ],
+    "correcta": 1,
+    "explicacion": "La rubéola durante el embarazo, especialmente en etapas tempranas, puede causar embriopatía congénita grave (cardiopatías, sordera, cataratas)."
+  },
+  {
+    "pregunta": "¿Cuál es el signo clínico característico del megaloeritema (quinta enfermedad) por Parvovirus B19?",
+    "opciones": [
+      "Manchas de Koplik",
+      "Signo de la 'cachetada' (mejillas enrojecidas)",
+      "Lengua aframbuesada",
+      "Exantema vesiculoso generalizado"
+    ],
+    "correcta": 1,
+    "explicacion": "El megaloeritema por Parvovirus B19 se caracteriza por el 'signo de la cachetada', con mejillas enrojecidas y erupción de bordes geográficos."
+  },
+  {
+    "pregunta": "¿Qué complicación hematológica grave puede producir el Parvovirus B19 en pacientes con hemoglobinopatías?",
+    "opciones": [
+      "Leucemia aguda",
+      "Crisis de aplasia medular",
+      "Policitemia vera",
+      "Trombocitosis reactiva"
+    ],
+    "correcta": 1,
+    "explicacion": "En pacientes con hemoglobinopatías o inmunocomprometidos, el Parvovirus B19 puede desencadenar crisis de aplasia medular."
+  },
+  {
+    "pregunta": "¿Qué virus causa el exantema súbito (roséola infantil)?",
+    "opciones": [
+      "Parvovirus B19",
+      "Herpesvirus humano 6 y 7",
+      "Virus de la rubéola",
+      "Virus del sarampión"
+    ],
+    "correcta": 1,
+    "explicacion": "El exantema súbito o roséola infantil es causado por el herpesvirus humano 6 y 7, típico en niños de 6 meses a 3 años."
+  },
+  {
+    "pregunta": "En el exantema súbito, ¿en qué momento aparece típicamente el exantema en relación con la fiebre?",
+    "opciones": [
+      "Antes de la fiebre",
+      "Al ceder la fiebre alta",
+      "Simultáneamente con el inicio de la fiebre",
+      "El exantema nunca aparece"
+    ],
+    "correcta": 1,
+    "explicacion": "El exantema aparece característicamente cuando cede la fiebre alta, distinguiéndolo de otras exantemáticas."
+  },
+  {
+    "pregunta": "¿Cuántos de los 6 criterios clínicos deben cumplirse para diagnosticar la enfermedad de Kawasaki?",
+    "opciones": [
+      "Al menos 2",
+      "Al menos 3",
+      "Al menos 5",
+      "Los 6 obligatoriamente"
+    ],
+    "correcta": 2,
+    "explicacion": "El diagnóstico de Kawasaki se basa en la presencia de al menos 5 de los 6 criterios clínicos, ya que no hay prueba de laboratorio específica."
+  },
+  {
+    "pregunta": "¿Cuál es el tratamiento de elección para la enfermedad de Kawasaki?",
+    "opciones": [
+      "Corticoides sistémicos en dosis altas",
+      "Aspirina en dosis altas + gammaglobulina IV",
+      "Antibióticos de amplio espectro",
+      "Antivirales específicos"
+    ],
+    "correcta": 1,
+    "explicacion": "El tratamiento combina aspirina en dosis altas (30-100 mg/kg/día) con gammaglobulina IV (400 mg/kg/día) para prevenir aneurismas coronarios."
+  },
+  {
+    "pregunta": "¿Cuál es el esquema de tratamiento de elección para la uretritis gonocócica no complicada?",
+    "opciones": [
+      "Penicilina G benzatínica IM",
+      "Ceftriaxona 250 mg IM + azitromicina 1 g VO, ambas en dosis única",
+      "Doxiciclina sola por 14 días",
+      "Metronidazol VO en dosis única"
+    ],
+    "correcta": 1,
+    "explicacion": "El tratamiento de elección de la gonorrea urogenital, rectal o faríngea es ceftriaxona 250 mg IM + azitromicina 1 g VO, ambas en dosis única."
+  },
+  {
+    "pregunta": "¿Cuál es el agente más frecuente de la uretritis NO gonocócica?",
+    "opciones": [
+      "Neisseria gonorrhoeae",
+      "Chlamydia trachomatis",
+      "Treponema pallidum",
+      "Haemophilus ducreyi"
+    ],
+    "correcta": 1,
+    "explicacion": "Chlamydia trachomatis es la causa más frecuente de uretritis no gonocócica, tratada con azitromicina o doxiciclina."
+  },
+  {
+    "pregunta": "¿Qué agente causa el chancro blando (chancroide), caracterizado por múltiples úlceras dolorosas?",
+    "opciones": [
+      "Treponema pallidum",
+      "Haemophilus ducreyi",
+      "Chlamydia trachomatis",
+      "Neisseria gonorrhoeae"
+    ],
+    "correcta": 1,
+    "explicacion": "El chancro blando o chancroide es causado por Haemophilus ducreyi, con úlceras múltiples y dolorosas, a diferencia del chancro duro (indoloro) de la sífilis."
+  },
+  {
+    "pregunta": "¿Cuál es la tríada de Hutchinson característica de la sífilis congénita tardía?",
+    "opciones": [
+      "Fiebre, exantema y adenopatías",
+      "Sordera, queratitis intersticial y alteraciones dentarias",
+      "Hepatoesplenomegalia, ictericia y anemia",
+      "Convulsiones, microcefalia y calcificaciones"
+    ],
+    "correcta": 1,
+    "explicacion": "La tríada de Hutchinson (sordera, queratitis intersticial y alteraciones dentarias) es característica de la sífilis congénita tardía."
+  },
+  {
+    "pregunta": "¿El VDRL es un método diagnóstico directo o indirecto para la sífilis?",
+    "opciones": [
+      "Directo, identifica al Treponema pallidum",
+      "Indirecto, detecta anticuerpos inespecíficos",
+      "Es un cultivo directo del microorganismo",
+      "Es una prueba de PCR"
+    ],
+    "correcta": 1,
+    "explicacion": "El VDRL es un método serológico indirecto que detecta anticuerpos antitreponémicos inespecíficos, no al microorganismo directamente."
+  },
+  {
+    "pregunta": "¿En qué año se incorporó la vacuna contra la hepatitis A al Calendario Nacional argentino?",
+    "opciones": [
+      "2000",
+      "2010",
+      "2017",
+      "2023"
+    ],
+    "correcta": 2,
+    "explicacion": "La vacuna contra hepatitis A se incorporó al calendario en 2017, con dosis única a los 12 meses; la de hepatitis B está desde el año 2000."
+  },
+  {
+    "pregunta": "¿Cuándo se aplica la primera dosis de la vacuna contra la hepatitis B en Argentina?",
+    "opciones": [
+      "A los 2 meses de vida",
+      "Dentro de las primeras 12 horas de vida",
+      "Al año de vida",
+      "A los 11 años"
+    ],
+    "correcta": 1,
+    "explicacion": "La primera dosis de hepatitis B se aplica dentro de las primeras 12 horas de vida, seguida de la pentavalente a los 2, 4 y 6 meses."
+  },
+  {
+    "pregunta": "¿Por qué NUNCA se deben administrar antibióticos en la infección por E. coli enterohemorrágica (O157:H7)?",
+    "opciones": [
+      "Porque no existe ningún antibiótico eficaz",
+      "Porque aumentan el riesgo de síndrome urémico hemolítico al liberar más toxina",
+      "Porque producen resistencia inmediata",
+      "Porque son ineficaces contra bacilos gramnegativos"
+    ],
+    "correcta": 1,
+    "explicacion": "Los antibióticos pueden lisar la bacteria y liberar más toxina Shiga-like, aumentando el riesgo de síndrome urémico hemolítico."
+  },
+  {
+    "pregunta": "¿Cuál es el fármaco de elección para tratar la colitis por Clostridium difficile leve a moderada?",
+    "opciones": [
+      "Amoxicilina-clavulánico",
+      "Metronidazol oral",
+      "Ciprofloxacina",
+      "Clindamicina"
+    ],
+    "correcta": 1,
+    "explicacion": "El metronidazol oral es de elección en casos leves a moderados de colitis por C. difficile; la vancomicina oral se reserva para casos más graves."
+  },
+  {
+    "pregunta": "¿Cuál es el agente causal más frecuente de artritis séptica en adultos sanos?",
+    "opciones": [
+      "Staphylococcus aureus",
+      "Escherichia coli",
+      "Pseudomonas aeruginosa",
+      "Neisseria meningitidis"
+    ],
+    "correcta": 0,
+    "explicacion": "Staphylococcus aureus es el agente más frecuente de artritis séptica en articulaciones nativas, seguido de estreptococos y neumococo."
+  },
+  {
+    "pregunta": "¿Cómo se adquiere la coccidioidomicosis?",
+    "opciones": [
+      "Por transmisión persona a persona vía respiratoria",
+      "Por inhalación de artroconidias de suelos áridos",
+      "Por contacto con agua contaminada",
+      "Por picadura de mosquito"
+    ],
+    "correcta": 1,
+    "explicacion": "La coccidioidomicosis se adquiere por inhalación de artroconidias presentes en suelos áridos, sin transmisión interhumana."
+  },
+  {
+    "pregunta": "¿Cuál es el agente causal de la paracoccidioidomicosis, endémica en el norte de Argentina?",
+    "opciones": [
+      "Coccidioides posadasii",
+      "Paracoccidioides brasiliensis",
+      "Histoplasma capsulatum",
+      "Cryptococcus neoformans"
+    ],
+    "correcta": 1,
+    "explicacion": "Paracoccidioides brasiliensis es el agente causal, endémico en zonas con agua dulce y suelos ácidos del norte y litoral argentino."
+  },
+  {
+    "pregunta": "¿Con qué técnica de tinción se realiza el diagnóstico rápido de la meningitis criptocócica en LCR?",
+    "opciones": [
+      "Gram",
+      "Ziehl-Neelsen",
+      "Tinta china",
+      "Giemsa"
+    ],
+    "correcta": 2,
+    "explicacion": "La tinción de tinta china permite visualizar la cápsula de Cryptococcus neoformans en LCR, siendo una micosis marcadora de SIDA."
+  },
+  {
+    "pregunta": "¿Cuál es la localización más característica del eritema nodoso?",
+    "opciones": [
+      "Cara y cuello",
+      "Región pretibial de miembros inferiores",
+      "Palmas y plantas",
+      "Cuero cabelludo"
+    ],
+    "correcta": 1,
+    "explicacion": "El eritema nodoso se presenta característicamente como nódulos dolorosos en la región pretibial de las extremidades inferiores."
+  },
+  {
+    "pregunta": "¿Cuál de las siguientes es una causa infecciosa clásica de eritema nodoso?",
+    "opciones": [
+      "Tuberculosis",
+      "Diabetes mellitus",
+      "Hipertensión arterial",
+      "Insuficiencia renal crónica"
+    ],
+    "correcta": 0,
+    "explicacion": "La tuberculosis es una causa infecciosa clásica de eritema nodoso, junto con estreptococo, Mycoplasma e histoplasmosis, entre otras."
+  },
+  {
+    "pregunta": "¿Cuál es la especie de Aspergillus más frecuentemente implicada en la aspergilosis invasora?",
+    "opciones": [
+      "Aspergillus niger",
+      "Aspergillus fumigatus",
+      "Aspergillus flavus",
+      "Aspergillus terreus"
+    ],
+    "correcta": 1,
+    "explicacion": "Aspergillus fumigatus es la especie más frecuentemente asociada a la aspergilosis invasora."
+  },
+  {
+    "pregunta": "¿Qué antifúngico se recomienda como profilaxis primaria en pacientes neutropénicos o trasplantados alogénicos de alto riesgo de aspergilosis?",
+    "opciones": [
+      "Fluconazol oral",
+      "Anfotericina B liposomal",
+      "Nistatina tópica",
+      "Ketoconazol oral"
+    ],
+    "correcta": 1,
+    "explicacion": "La anfotericina B liposomal (3 mg/kg/día) es la profilaxis primaria recomendada en neutropénicos y trasplantados alogénicos de alto riesgo."
+  },
+  {
+    "pregunta": "¿Qué grupo de pacientes es característicamente afectado por la aspergilosis broncopulmonar alérgica?",
+    "opciones": [
+      "Pacientes neutropénicos con leucemia",
+      "Pacientes atópicos con asma u otras alergias respiratorias",
+      "Pacientes con VIH avanzado",
+      "Recién nacidos prematuros"
+    ],
+    "correcta": 1,
+    "explicacion": "La aspergilosis broncopulmonar alérgica afecta a pacientes atópicos con antecedentes de asma, tratándose con corticosteroides."
+  },
+  {
+    "pregunta": "¿Cuál es la forma clínica más frecuente de mucormicosis?",
+    "opciones": [
+      "Pulmonar",
+      "Rino-sinuso-cerebral aguda",
+      "Gastrointestinal",
+      "Cutánea"
+    ],
+    "correcta": 1,
+    "explicacion": "La forma rino-sinuso-cerebral aguda es la más frecuente de mucormicosis, con extensión a órbita y SNC en casos graves."
+  },
+  {
+    "pregunta": "¿Cuál es el tratamiento de elección para la mucormicosis, además del desbridamiento quirúrgico agresivo?",
+    "opciones": [
+      "Fluconazol oral",
+      "Anfotericina B (complejo lipídico o liposomal)",
+      "Itraconazol oral",
+      "Voriconazol IV"
+    ],
+    "correcta": 1,
+    "explicacion": "La anfotericina B (complejo lipídico o liposomal) junto con el desbridamiento quirúrgico agresivo es el tratamiento de elección de la mucormicosis; el voriconazol no es eficaz frente a Mucorales."
+  },
+  {
+    "pregunta": "¿Cuál es el antígeno viral utilizado en la serología para diagnosticar el síndrome pulmonar por hantavirus en Argentina?",
+    "opciones": [
+      "Antígeno del serotipo Andes",
+      "Antígeno del virus Junín",
+      "Antígeno del virus del dengue",
+      "Antígeno de Leptospira"
+    ],
+    "correcta": 0,
+    "explicacion": "El serotipo Andes es el hantavirus circulante en Argentina, y su antígeno se usa en el ELISA diagnóstico."
+  },
+  {
+    "pregunta": "¿Cuál es el manejo de líquidos recomendado en la fase cardiopulmonar del síndrome pulmonar por hantavirus?",
+    "opciones": [
+      "Hidratación agresiva con cristaloides",
+      "Restricción de líquidos para evitar el edema pulmonar",
+      "Diuréticos de asa en dosis altas de rutina",
+      "No requiere manejo especial de líquidos"
+    ],
+    "correcta": 1,
+    "explicacion": "En la fase cardiopulmonar se recomienda restringir el ingreso de líquidos para evitar el edema pulmonar, dado el escape capilar."
+  },
+  {
+    "pregunta": "¿Cuál de las siguientes bacterias se asocia con más frecuencia a exacerbaciones agudas de EPOC?",
+    "opciones": [
+      "Haemophilus influenzae",
+      "Treponema pallidum",
+      "Clostridium tetani",
+      "Neisseria meningitidis"
+    ],
+    "correcta": 0,
+    "explicacion": "Haemophilus influenzae, junto con S. pneumoniae y Moraxella catarrhalis, es de los agentes bacterianos más frecuentes en exacerbaciones de EPOC."
+  }
+]

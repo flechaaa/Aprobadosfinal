@@ -1,0 +1,261 @@
+import { useState, useEffect, useCallback } from 'react';
+import { StartScreen } from '@/components/StartScreen';
+import { GameScreen } from '@/components/GameScreen';
+import { ResultsScreen } from '@/components/ResultsScreen';
+import { AdminPanel } from '@/components/AdminPanel';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { PasswordRecoveryModal } from '@/components/PasswordRecoveryModal';
+import { supabase } from '@/lib/supabase';
+import { loadTaxonomy } from '@/utils/taxonomy';
+import { selectRandomQuestions, loadChallenge, loadRandomQuestionsForGame } from '@/utils/game';
+import { loadQuestionsForPlaySelection, type PlaySelection } from '@/utils/playSelection';
+import type { AnswerRecord, Chair, ChallengeData, Question, Subject, University } from '@/types';
+import type { TaxonomySelection } from '@/components/TaxonomyPicker';
+
+type Screen = 'start' | 'game' | 'results' | 'admin';
+
+function App() {
+  const [screen, setScreen] = useState<Screen>('start');
+  const [playerName, setPlayerName] = useState('');
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [questionIndices, setQuestionIndices] = useState<number[]>([]);
+  const [answers, setAnswers] = useState<AnswerRecord[]>([]);
+  const [challengeData, setChallengeData] = useState<ChallengeData | null>(null);
+  const [currentSelection, setCurrentSelection] = useState<PlaySelection | null>(null);
+
+  const [universities, setUniversities] = useState<University[]>([]);
+  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [chairs, setChairs] = useState<Chair[]>([]);
+  const [totalQuestions, setTotalQuestions] = useState(0);
+  const [taxonomyError, setTaxonomyError] = useState('');
+  const [questionsLoadError, setQuestionsLoadError] = useState('');
+
+  const fetchQuestionCount = useCallback(async () => {
+    const { count, error } = await supabase
+      .from('questions')
+      .select('id', { count: 'exact', head: true })
+      .eq('active', true);
+
+    if (error) {
+      console.error('No se pudo leer el total de preguntas:', error);
+      setTotalQuestions(0);
+      return;
+    }
+
+    setTotalQuestions(count ?? 0);
+  }, []);
+
+  const fetchTaxonomy = useCallback(() => {
+    return loadTaxonomy()
+      .then((taxonomy) => {
+        setUniversities(taxonomy.universities);
+        setSubjects(taxonomy.subjects);
+        setChairs(taxonomy.chairs);
+      })
+      .catch(() =>
+        setTaxonomyError('La clasificación todavía no está disponible. Podés proponer nombres nuevos.')
+      );
+  }, []);
+
+  function startChallengeFromUrl(decodedChallenge: ChallengeData) {
+    const challengeSelection: TaxonomySelection | null = decodedChallenge.selection
+      ? {
+          universityId: decodedChallenge.selection.universityId,
+          subjectId: decodedChallenge.selection.subjectId,
+          partialId: decodedChallenge.selection.partialId || decodedChallenge.selection.chairId || '',
+          chairId: decodedChallenge.selection.chairId || decodedChallenge.selection.partialId || '',
+          unitId: decodedChallenge.selection.unitId ?? null,
+        }
+      : null;
+
+    setChallengeData(decodedChallenge);
+    setCurrentSelection(challengeSelection);
+    setPlayerName('Anónimo');
+    setQuestionsLoadError('');
+    setQuestions(decodedChallenge.q);
+    setQuestionIndices(decodedChallenge.q.map((_, i) => i));
+    setScreen('game');
+  }
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const mode = params.get('mode');
+    const id = params.get('id');
+
+    if (id) {
+      void loadChallenge(id).then((decoded) => {
+        if (decoded && decoded.q.length > 0) {
+          setChallengeData(decoded);
+          if (mode === 'challenge') {
+            startChallengeFromUrl(decoded);
+          }
+        } else {
+          setQuestionsLoadError('El desafío ya no está disponible o el link es inválido.');
+        }
+      });
+    }
+
+    void fetchTaxonomy();
+    void fetchQuestionCount();
+  }, [fetchTaxonomy, fetchQuestionCount]);
+
+  const handleStart = async (name: string, selection: PlaySelection) => {
+    setPlayerName(name);
+    setCurrentSelection(selection);
+    setQuestionsLoadError('');
+
+    if (challengeData) {
+      const challengeQuestions = Array.isArray(challengeData.q) ? challengeData.q : [];
+      if (challengeQuestions.length === 0) {
+        setQuestions([]);
+        setQuestionIndices([]);
+        setQuestionsLoadError('El desafío recibido no incluye preguntas válidas.');
+        setScreen('start');
+        return;
+      }
+
+      setQuestions(challengeQuestions);
+      setQuestionIndices(challengeQuestions.map((_, i) => i));
+      setScreen('game');
+      return;
+    }
+
+    // Cargar preguntas de Supabase según la materia y cátedra seleccionada.
+    const loadedQuestions = await loadQuestionsForPlaySelection(selection);
+
+    if (loadedQuestions.length === 0) {
+      setQuestions([]);
+      setQuestionIndices([]);
+      setQuestionsLoadError('Próximamente preguntas para esta cátedra');
+      setScreen('start');
+      return;
+    }
+
+    setQuestions(loadedQuestions);
+    setQuestionIndices(loadedQuestions.map((_, i) => i));
+    setScreen('game');
+  };
+
+  const handleQuickGame = async (name: string) => {
+    setPlayerName(name);
+    setCurrentSelection(null);
+    setQuestionsLoadError('');
+
+    const loadedQuestions = await loadRandomQuestionsForGame();
+    if (loadedQuestions.length === 0) {
+      setQuestions([]);
+      setQuestionIndices([]);
+      setQuestionsLoadError('No hay preguntas disponibles en la base de datos.');
+      setScreen('start');
+      return;
+    }
+
+    setQuestions(loadedQuestions);
+    setQuestionIndices(loadedQuestions.map((_, i) => i));
+    setScreen('game');
+  };
+
+  const hasValidGameData = questions.length > 0 || questionIndices.length > 0;
+
+  const handleFinish = (gameAnswers: AnswerRecord[]) => {
+    setAnswers(gameAnswers);
+    localStorage.setItem('aprobados_has_played_free_game', 'true');
+    setScreen('results');
+  };
+
+  const handlePlayAgain = async () => {
+    setAnswers([]);
+    setChallengeData(null);
+    if (currentSelection) {
+      const loadedQuestions = await loadQuestionsForPlaySelection(currentSelection);
+      setQuestions(loadedQuestions);
+      setQuestionIndices(loadedQuestions.map((_, i) => i));
+    } else {
+      setQuestionIndices(selectRandomQuestions(5));
+      setQuestions([]);
+    }
+    setScreen('game');
+  };
+
+  const handleBackToHome = () => {
+    setAnswers([]);
+    setQuestionIndices([]);
+    setQuestions([]);
+    setQuestionsLoadError('');
+    setChallengeData(null);
+    setPlayerName('');
+    window.history.replaceState({}, '', window.location.pathname);
+    void fetchTaxonomy();
+    setScreen('start');
+  };
+
+  return (
+    <ErrorBoundary>
+      <PasswordRecoveryModal />
+      {screen === 'start' && (
+        <StartScreen
+          onStart={handleStart}
+          onQuickGame={handleQuickGame}
+          challengeData={challengeData}
+          universities={universities}
+          subjects={subjects}
+          chairs={chairs}
+          taxonomyError={taxonomyError}
+          totalQuestions={totalQuestions}
+          onOpenAdmin={() => setScreen('admin')}
+          questionsLoadError={questionsLoadError}
+        />
+      )}
+      {screen === 'game' && hasValidGameData && (
+        <GameScreen
+          questions={questions.length > 0 ? questions : undefined}
+          questionIndices={questionIndices}
+          onFinish={handleFinish}
+        />
+      )}
+
+      {screen === 'game' && !hasValidGameData && (
+        <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
+          <div className="max-w-md rounded-3xl bg-white p-8 text-center shadow-xl">
+            <p className="text-lg font-bold text-gray-800">No hay preguntas para iniciar la partida.</p>
+            <p className="mt-2 text-sm text-gray-500">Volvé al menú y elegí una materia o un desafío válido.</p>
+            <button
+              type="button"
+              onClick={() => setScreen('start')}
+              className="mt-4 rounded-xl bg-teal-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-teal-700"
+            >
+              Volver al inicio
+            </button>
+          </div>
+        </div>
+      )}
+      {screen === 'results' && (
+        <ResultsScreen
+          answers={answers}
+          questionIndices={questionIndices}
+          questions={questions}
+          playerName={playerName}
+          challengeData={challengeData}
+          selection={currentSelection}
+          universities={universities}
+          subjects={subjects}
+          chairs={chairs}
+          onRestart={handlePlayAgain}
+          onHome={handleBackToHome}
+          onTaxonomyRefresh={fetchTaxonomy}
+        />
+      )}
+      {screen === 'admin' && (
+        <AdminPanel
+          onBack={() => {
+            void fetchTaxonomy();
+            void fetchQuestionCount();
+            setScreen('start');
+          }}
+        />
+      )}
+    </ErrorBoundary>
+  );
+}
+
+export default App;
