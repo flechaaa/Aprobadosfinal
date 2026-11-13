@@ -72,7 +72,7 @@ export function StartScreen({ onStart, onQuickGame, challengeData, universities,
 
   const handleOpenSimulacros = () => {
     if (sessionStorage.getItem(SIMULACROS_ACCESS_KEY) === 'true') {
-      window.location.href = '/Herramienta.html';
+      window.location.href = '/Herramienta%20Nueva.html';
       return;
     }
     setSimulacrosPassword('');
@@ -87,7 +87,7 @@ export function StartScreen({ onStart, onQuickGame, challengeData, universities,
       return;
     }
     sessionStorage.setItem(SIMULACROS_ACCESS_KEY, 'true');
-    window.location.href = '/Herramienta.html';
+    window.location.href = '/Herramienta%20Nueva.html';
   };
 
   return (
