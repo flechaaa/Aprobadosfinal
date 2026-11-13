@@ -575,7 +575,7 @@ function homeHTML(){let h=head();
   <button aria-pressed="${mode==="real"}" onclick="mode='real';saveP();render()"><b>EXAMEN REAL</b><span>Reloj de ${SEC/60} min por pregunta · resultados al final</span></button></div>`;
   MATS.forEach(([m,k])=>{const all=allOf(m).length,a=BANK[m]||[];
     h+=`<div class="mat"><label class="mname" for="s_${k}"><span class="dot" style="background:var(--${k})"></span>${m}<span class="sub" style="font-weight:400">· ${all} preguntas</span></label>`;
-    if(!all)h+=`<div class="empty">${SHARED_RES[m]?"Se suben a partir del 28/10.":"Todavía no hay preguntas cargadas."}</div>`;
+    if(!all)h+=`<div class="empty">${SHARED_RES[m]?"Disponible en esta sección.":"Todavía no hay preguntas cargadas."}</div>`;
     else h+=`<select id="s_${k}" onchange="setSel('${m}',this.value)"><option value="rand" ${sel[m]==="rand"?"selected":""}>🎲 ${PER} al azar de toda la materia</option><option value="weak" ${sel[m]==="weak"?"selected":""}>🎯 ${PER} priorizando las que fallé</option>`+
       a.map(e=>`<option value="${e.ex.replace(/"/g,"&quot;")}" ${sel[m]===e.ex?"selected":""}>${e.lbl||e.ex} · ${e.q.length>PER?PER+" de "+e.q.length:e.q.length}${e.q.length>PER?" · hechas "+doneOf(poolOf(m,e.ex))+"/"+e.q.length:""}</option>`).join("")+`<option value="__no" ${sel[m]===null?"selected":""}>No incluir</option></select>`+(sel[m]?covLine(m,sel[m]):"");
     h+=`</div>`});
@@ -769,15 +769,15 @@ function inBanner(m){if(!inProg())return"";const pre=m?m+"|":"";if(m&&!order[0].
   <div class="nav" style="margin-top:10px"><button class="btn pri" onclick="resume()">▶ Continuar</button>${kind==="prac"?"":`<button class="btn" data-msg="Tocá de nuevo para descartarlo" onclick="ask(this,discard)">Descartar</button>`}</div></div>`}
 const prog=(d,n)=>`<span class="mono prog ${d>=n?"okp":""}">${d}/${n} ${d>=n?"✅":"⏳"}</span>`;
 const SHARED_GL="Preguntas compartidas en el grupo de 6.º año",SHARED_RES={"Reumatología":1,"Endocrinología":1};
-function sharedSlot(m){if(!SHARED_RES[m]||(BANK[m]||[]).some(e=>e.gl===SHARED_GL))return "";return `<div class="card"><div class="gh"><h3 style="margin:0">${SHARED_GL}</h3><span class="mono prog">0/0 ⏳</span></div><div class="row exr"><span class="lbl" style="flex:1;min-width:0">Pendiente</span><span class="sub">Se suben a partir del 28/10</span></div></div>`}
+function sharedSlot(m){if(!SHARED_RES[m]||(BANK[m]||[]).some(e=>e.gl===SHARED_GL))return "";return `<div class="card"><div class="gh"><h3 style="margin:0">${SHARED_GL}</h3><span class="mono prog">0/0 ⏳</span></div><div class="row exr"><span class="lbl" style="flex:1;min-width:0">Pendiente</span><span class="sub">Disponible en esta sección</span></div></div>`}
 function matHTML(){const m=TAB,mk=MATS.find(x=>x[0]===m)||["",""],a=BANK[m]||[];let h=head();
   const all=allOf(m),dn=doneOf(all);
-  h+=`<div class="mhead"><span class="dot" style="background:var(--${mk[1]})"></span><b>${m}</b><span class="sub">${all.length?`${all.length} preguntas · hechas ${dn}/${all.length} ${dn>=all.length?"✅":"⏳"}`:(SHARED_RES[m]?"se suben a partir del 28/10":"sin preguntas todavía")}</span></div>`;
+  h+=`<div class="mhead"><span class="dot" style="background:var(--${mk[1]})"></span><b>${m}</b><span class="sub">${all.length?`${all.length} preguntas · hechas ${dn}/${all.length} ${dn>=all.length?"✅":"⏳"}`:(SHARED_RES[m]?"disponible en esta sección":"sin preguntas todavía")}</span></div>`;
   if(MSUB==="plan")MSUB="prac";
   if((MSUB==="plan"||MSUB==="fich")&&m!=="Nefrología")MSUB="prac";
   h+=`<div class="subtabs">${SUBS.filter(([k])=>(k!=="plan"&&k!=="fich")||m==="Nefrología").map(([k,t])=>`<button class="chip" aria-pressed="${MSUB===k}" onclick="goSub('${k}')">${t}</button>`).join("")}</div>`;
   h+=inBanner(m);
-  if(SHARED_RES[m]&&!(BANK[m]||[]).length)h+=`<div class="note"><b>📌 ${m}: en preparación.</b> Las preguntas, simulacros y resúmenes de esta materia se suben a partir del 28/10.</div>`;
+  if(SHARED_RES[m]&&!(BANK[m]||[]).length)h+=`<div class="note"><b>📌 ${m}: disponible.</b> Las preguntas, simulacros y resúmenes de esta materia están disponibles en esta sección.</div>`;
   if(MSUB==="plan")return h+planHTML();
   if(MSUB==="res")return h+resHTML(m);
   if(MSUB==="fich")return h+fichHTML();
